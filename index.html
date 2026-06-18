@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>飞行轨迹可视化系统</title>
+  <link rel="stylesheet" href="/src/styles/main.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="map-container"></div>
+    <div id="panel">
+      <div class="panel-header">
+        <h2>🛩️ 飞行轨迹</h2>
+        <span class="panel-subtitle">地面实况 vs 预测 · 悬浮查看 · 点击定位</span>
+        <div class="progress-track">
+          <div class="progress-bar" id="progress-bar"></div>
+        </div>
+      </div>
+      <div class="panel-controls">
+        <div class="control-group">
+          <label>模型</label>
+          <select id="model-select">
+            <option value="LSTM">LSTM</option>
+            <option value="GRU">GRU</option>
+            <option value="RNN">RNN</option>
+            <option value="DSTPP">DSTPP</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>编号</label>
+          <input type="range" id="trajectory-slider" min="0" max="99" value="0" />
+          <span id="trajectory-label">#0</span>
+        </div>
+        <div class="control-group" style="justify-content:space-between">
+          <button id="btn-overview" class="btn" style="flex:1">🌐 全局概览</button>
+          <button id="btn-play" class="btn" style="flex:0.8">▶ 播放</button>
+          <button id="btn-reset" class="btn" style="flex:0.6">⏹</button>
+        </div>
+        <div class="control-group">
+          <button id="btn-edas" class="btn" style="flex:1;border-color:#8844dd;color:#c0a0ff">🟣 EDAS 事件</button>
+        </div>
+        <div class="control-group">
+          <label style="width:auto">速度</label>
+          <input type="range" id="speed-slider" min="1" max="10" value="3" style="flex:1" />
+        </div>
+      </div>
+      <div class="panel-info" id="panel-info">
+        <div class="info-grid">
+          <div><span class="info-label">模型</span><span id="info-model">LSTM</span></div>
+          <div><span class="info-label">轨迹</span><span id="info-id">#0</span></div>
+          <div><span class="info-label">采样</span><span id="info-points">—</span></div>
+          <div><span class="info-label">时长</span><span id="info-duration">—</span></div>
+          <div><span class="info-label">距离</span><span id="info-distance">—</span></div>
+          <div><span class="info-label">RMSE</span><span id="info-rmse">—</span></div>
+        </div>
+      </div>
+      <div class="panel-legend">
+        <div class="legend-item"><span class="legend-dot gt-dot"></span> 地面实况 (GT)</div>
+        <div class="legend-item"><span class="legend-dot pred-dot"></span> 预测 (Pred)</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#ff4466"></span> 起点</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#ff5050"></span> 偏移线</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#dc50dc"></span> EDAS · HK</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#ff783c"></span> EDAS · 伊朗</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#50b4ff"></span> EDAS · 乌克兰</div>
+      </div>
+      <div class="panel-detail" id="panel-detail">
+        <div class="detail-hint">点击轨迹点查看详情</div>
+      </div>
+      <div class="panel-footer">
+        <span class="footer-hint">空格=播放 · ← → 切换</span>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

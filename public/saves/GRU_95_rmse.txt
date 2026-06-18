@@ -1,0 +1,2 @@
+rmse_total rmse_temporal rmse_spatial mape_total mape_temporal mape_spatial
+0.00397 0.00199 0.00595 0.00122 0.00239 0.00005
