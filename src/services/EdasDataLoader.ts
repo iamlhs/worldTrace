@@ -213,46 +213,84 @@ export class EdasDataLoader implements EdasDataSource {
       const text = await resp.text();
       const lines = text.trim().split('\n').filter(l => l.trim());
 
-      // 按 cluid 分组，每组取第一条代表性事件
-      const clusterMap = new Map<number, any>();
+      // 逐条 geocode + 按 (locationName, date) 聚合
+      const groupMap = new Map<string, {
+        tweets: string[];
+        dates: string[];
+        allKeywords: string[];
+        levels: string[];
+        lat: number;
+        lon: number;
+        locationName: string;
+      }>();
+
       for (const line of lines) {
         try {
           const item = JSON.parse(line);
-          const cluid = item.cluid ?? -1;
-          if (!clusterMap.has(cluid)) {
-            clusterMap.set(cluid, item);
+          const summary: string = item.origin_text || item.text || '';
+          const geo = geocodeText(summary, 'ukraine');
+          const date = (item.created_at || '').slice(0, 10);
+          const key = `${geo.locationName}|${date}`;
+
+          if (!groupMap.has(key)) {
+            groupMap.set(key, {
+              tweets: [], dates: [], allKeywords: [], levels: [],
+              lat: geo.lat, lon: geo.lon, locationName: geo.locationName,
+            });
           }
+          const g = groupMap.get(key)!;
+          g.tweets.push(summary);
+          g.dates.push(date);
+          g.allKeywords.push(...(item.keywords || []));
+          g.levels.push(item.level || '一般事件');
         } catch { /* skip parse errors */ }
       }
 
+      // 转换为 EdasEvent（每个聚合组一条）
       const events: EdasEvent[] = [];
-      for (const item of clusterMap.values()) {
-        const summary: string = item.origin_text || item.text || '';
-        const keywords: string[] = item.keywords || [];
-        const level = item.level || '一般事件';
-        const geo = geocodeText(summary, 'ukraine');
-
-        // 将 keywords 数组转为 Record
+      for (const [key, g] of groupMap) {
+        // 关键词频率统计
         const kwMap: Record<string, number> = {};
-        for (const kw of keywords) {
+        for (const kw of g.allKeywords) {
           kwMap[kw] = (kwMap[kw] || 0) + 1;
         }
+        // 按频率排序取 top 20
+        const sortedKw = Object.entries(kwMap).sort((a, b) => b[1] - a[1]).slice(0, 20);
+        const topKw: Record<string, number> = {};
+        for (const [k, v] of sortedKw) topKw[k] = v;
+
+        // 事件等级：取最高频等级
+        const levelCounts: Record<string, number> = {};
+        for (const lv of g.levels) levelCounts[lv] = (levelCounts[lv] || 0) + 1;
+        let dominantLevel = '一般事件';
+        let maxLv = 0;
+        for (const [lv, c] of Object.entries(levelCounts)) {
+          if (c > maxLv) { maxLv = c; dominantLevel = lv; }
+        }
+
+        // 摘要：取第一条代表性推文 + 总数
+        const tweetCount = g.tweets.length;
+        const sampleSummary = (g.tweets[0] || '').slice(0, 150);
+        const fullSummary = tweetCount > 1
+          ? `[${tweetCount}条推文] ${sampleSummary} ...等`
+          : sampleSummary;
 
         events.push({
-          id: `ukraine_${item.id || item.cluid || Math.random().toString(36).slice(2)}`,
+          id: `ukraine_${key.replace(/[^a-z0-9]/g, '_')}`,
           region: 'ukraine',
-          date: (item.created_at || '').slice(0, 10),
-          summary: summary.slice(0, 200),
-          keywords: kwMap,
-          bursty: level === '特别重大事件',
-          level,
-          cluid: item.cluid,
-          lon: geo.lon,
-          lat: geo.lat,
-          locationName: geo.locationName,
+          date: g.dates[0] || '',
+          summary: fullSummary,
+          keywords: topKw,
+          bursty: dominantLevel === '特别重大事件' || tweetCount >= 5,
+          level: dominantLevel,
+          cluid: tweetCount, // 借 cluid 存推文数量
+          lon: g.lon,
+          lat: g.lat,
+          locationName: g.locationName,
         });
       }
 
+      console.log(`[EDAS] Ukraine: ${lines.length} tweets → ${events.length} events (${groupMap.size} groups)`);
       return events;
     } catch {
       return [];

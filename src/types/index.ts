@@ -1,5 +1,5 @@
 // ============================================================
-// 数据接口定义 — 飞行轨迹可视化系统
+// 数据接口定义 — 船舶航迹可视化系统
 // ============================================================
 
 /** 单个轨迹点 */
@@ -77,12 +77,12 @@ export interface MapConfig {
 
 /**
  * 数据源接口
- * 实现此接口可从不同来源加载飞行数据
+ * 实现此接口可从不同来源加载航行数据
  */
 export interface FlightDataSource {
   /** 获取支持的模型列表 */
   getModels(): Promise<ModelType[]>;
-  /** 获取指定模型和编号的轨迹数据 */
+  /** 获取指定模型和编号的航迹数据 */
   getTrajectory(model: ModelType, id: number): Promise<FlightData | null>;
   /** 获取可用的轨迹编号列表 */
   getAvailableIds(model: ModelType): Promise<number[]>;
@@ -138,4 +138,27 @@ export interface EdasDataSource {
   loadEvents(): Promise<EdasEvent[]>;
   /** 按区域筛选 */
   loadEventsByRegion(region: EdasRegion): Promise<EdasEvent[]>;
+}
+
+// ============================================================
+// 船舶航行意图分析系统
+// ============================================================
+
+/** 作战意图类型 1=侦察监视 2=运输转场 3=巡逻预警 */
+export type IntentType = 1 | 2 | 3 | 4 | 5;
+
+/** 单个意图条目（从 act-{uuid}.txt 解析） */
+export interface IntentionEntry {
+  file: string;
+  intent: IntentType;
+  reason: string;
+  summary: string;
+}
+
+/** 某个轨迹 ID 的意图汇总 */
+export interface TrajectoryIntentions {
+  trajectoryId: number;
+  entries: IntentionEntry[];
+  distribution: Record<number, number>;
+  dominantIntent: IntentType;
 }

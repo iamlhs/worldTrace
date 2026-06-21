@@ -1,5 +1,5 @@
 /* ==========================================================
-   飞行轨迹可视化系统 — 主样式
+   船舶航迹可视化系统 — 主样式
    包含: 布局、面板、tooltip、弹出层、动画
    ========================================================== */
 
@@ -163,8 +163,31 @@ html, body {
 .edas-overlay-body::-webkit-scrollbar-track { background: transparent; }
 .edas-overlay-body::-webkit-scrollbar-thumb { background: #3a2a5a; border-radius: 2px; }
 
+/* ===================== EDAS 图注和概况 ===================== */
+.panel-legend .legend-item { font-size: 12px; color: #d0c0e8; }
+.panel-legend .legend-dot { width: 12px; height: 12px; }
+
+#panel-edas-summary {
+  font-size: 12px; color: #d0c0e8;
+}
+#panel-edas-summary > div:first-child {
+  font-size: 13px; color: #e0c0ff;
+}
+#edas-summary-content {
+  font-size: 12px !important; color: #c8b8e0 !important; line-height: 1.8 !important;
+}
+#edas-summary-content span {
+  font-weight: 500;
+}
+
 .edas-list-item:hover { background: #1a0e2e !important; }
 .edas-list-item:active { background: #2a1a44 !important; }
+
+/* EDAS 聚类光晕脉冲 */
+@keyframes edasGlowPulse {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.45; }
+}
 
 /* ===================== 坐标显示 ===================== */
 .map-coords {

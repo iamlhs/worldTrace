@@ -142,30 +142,32 @@ export class MapEngine {
 
   private buildTooltipHtml(d: any, layerId: string): string {
     // ── EDAS 图层特殊处理 ──
-    if (layerId === 'edas-clusters') {
-      const regionCounts: Record<string, number> = {};
-      if (d.count) {
-        return `<div class="tt-header" style="color:#cc66ff">🟣 EDAS 聚类</div>
-          <div class="tt-row">📊 ${d.count} 个事件</div>
-          <div class="tt-row">🖱️ 点击展开</div>`;
-      }
+    if (layerId === 'edas-clusters' || layerId === 'edas-clusters-glow') {
+      const regionEmoji: Record<string, string> = { hongkong: '🇭🇰', iran: '🇮🇷', ukraine: '🇺🇦' };
+      const flag = regionEmoji[d.dominantRegion] || '📍';
+      const loc = d.topLocation || d.dominantRegion || '未知地区';
+      return `<div class="tt-header" style="color:#ffcc44">${flag} ${loc}</div>
+        <div class="tt-row">📊 ${d.count || 1} 个聚合事件</div>
+        ${d.totalTweetCount ? `<div class="tt-row">🐦 ${d.totalTweetCount} 条原始推文</div>` : ''}
+        <div class="tt-row">🖱️ 点击查看事件列表</div>`;
     }
     if (layerId === 'edas-events' && d.event) {
       const e = d.event;
       const emoji: Record<string, string> = { hongkong: '🇭🇰', iran: '🇮🇷', ukraine: '🇺🇦' };
-      const regionEmoji = emoji[String(e.region)] || '';
-      return `<div class="tt-header" style="color:#cc66ff">🟣 EDAS 事件</div>
-        <div class="tt-row">${regionEmoji} ${e.locationName || e.region}</div>
+      const flag = emoji[String(e.region)] || '';
+      const loc = e.locationName || e.region || '';
+      return `<div class="tt-header" style="color:#cc66ff">${flag} ${loc}</div>
         <div class="tt-row">📅 ${e.date}</div>
         ${e.level ? `<div class="tt-row">📶 ${e.level}</div>` : ''}
+        ${e.cluid ? `<div class="tt-row">🐦 ${e.cluid} 条推文</div>` : ''}
         <div class="tt-row" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.summary?.slice(0, 60) || ''}</div>`;
     }
 
     let header = '📍 点';
     let color = '#8888ff';
-    if (layerId.includes('gt-')) { header = '🟢 地面实况'; color = '#00ff88'; }
+    if (layerId.includes('gt-')) { header = '🟢 实际航迹'; color = '#00ff88'; }
     else if (layerId.includes('pred-')) { header = '🟠 预测'; color = '#ffaa00'; }
-    else if (layerId.includes('cursor')) { header = '✈️ 当前位置'; color = '#ff66ff'; }
+    else if (layerId.includes('cursor')) { header = '🚢 当前位置'; color = '#ff66ff'; }
     else if (layerId.includes('arrow')) { header = '➡️ 方向'; color = '#66ccff'; }
     else if (layerId.includes('offset')) { header = '📏 偏移'; color = '#ff5050'; }
     else if (layerId.includes('label')) { header = '🏷️ 时间标记'; color = '#aaddff'; }
@@ -186,7 +188,7 @@ export class MapEngine {
     const isGT = layerId.includes('gt-');
     const isPred = layerId.includes('pred-');
     const color = isGT ? '#00ff88' : isPred ? '#ffaa00' : '#ff66ff';
-    const title = isGT ? '🟢 地面实况点' : isPred ? '🟠 预测点' : '📍 轨迹点';
+    const title = isGT ? '🟢 实际航迹点' : isPred ? '🟠 预测点' : '📍 航迹点';
 
     let html = `<div class="map-popup-close">✕</div>`;
     html += `<div class="popup-title" style="border-left:3px solid ${color};padding:6px 10px">${title}</div><div class="popup-body">`;

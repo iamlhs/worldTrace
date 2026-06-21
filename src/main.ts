@@ -1,13 +1,14 @@
 // ============================================================
-// 飞行轨迹可视化系统 — 主入口
-// 包含: 轨迹加载、动画控制、搜索定位、信息面板
+// 船舶航迹可视化系统 — 主入口
+// 包含: 航迹加载、动画控制、搜索定位、信息面板
 // ============================================================
 
 import { MapEngine } from '@/map/MapEngine';
 import { FlightTrailRenderer } from '@/map/FlightTrails';
 import { flightDataLoader } from '@/services/FlightDataLoader';
 import { edasDataLoader } from '@/services/EdasDataLoader';
-import type { FlightData, ModelType, EdasEvent } from '@/types';
+import { intentionsLoader, INTENT_LABELS, INTENT_COLORS } from '@/services/IntentionsLoader';
+import type { FlightData, ModelType, EdasEvent, TrajectoryIntentions } from '@/types';
 
 // ---- 状态 ----
 
@@ -19,10 +20,11 @@ let animationFrameId: number | null = null;
 let overviewMode = true;
 let allStartPoints: Array<{ lat: number; lon: number; id: number; model: ModelType }> = [];
 
-// EDAS 事件状态
-let edasVisible = false;
+// EDAS 始终开启
 let edasEvents: EdasEvent[] = [];
-let edasLoading = false;
+
+// 意图加载状态
+let intentionsReady = false;
 
 // ---- 初始化 ----
 
@@ -65,7 +67,7 @@ trailRenderer.onFrame = (time: number) => {
   }
 };
 
-// ---- 加载轨迹 ----
+// ---- 加载航迹 ----
 
 async function loadTrajectory(model: ModelType, id: number): Promise<void> {
   stopAnimation();
@@ -94,7 +96,7 @@ function rebuildLayers(): void {
 function updateInfo(data: FlightData): void {
   document.getElementById('info-model')!.textContent = data.model;
   document.getElementById('info-id')!.textContent = `#${data.id}`;
-  document.getElementById('info-points')!.textContent = `GT: ${data.groundTruth.length} · Pred: ${data.prediction.length}`;
+  document.getElementById('info-points')!.textContent = `实际: ${data.groundTruth.length} 点 · 预测: ${data.prediction.length} 点`;
   document.getElementById('info-duration')!.textContent =
     `${data.groundTruth[data.groundTruth.length - 1]?.t.toFixed(2) || '?'} h`;
 
@@ -114,7 +116,75 @@ function updateInfo(data: FlightData): void {
     totalDist += 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   }
   document.getElementById('info-distance')!.textContent = `${totalDist.toFixed(2)} km`;
-  document.getElementById('panel-detail')!.innerHTML = '<div class="detail-hint">点击轨迹点查看详情</div>';
+  document.getElementById('panel-detail')!.innerHTML = '<div class="detail-hint">点击航迹点查看详情</div>';
+  renderIntentionPanel(data.id);
+}
+
+// ---- 意图面板显示（独立于 panel-detail，位置在上方更显眼） ----
+
+function renderIntentionPanel(trajectoryId: number): void {
+  const panel = document.getElementById('panel-intentions')!;
+  const content = document.getElementById('intent-content')!;
+
+  if (!intentionsReady) {
+    // 加载中
+    panel.style.display = 'block';
+    content.innerHTML = '<div style="color:#8870a8;font-size:11px;padding:4px 0">⏳ 正在加载意图数据...</div>';
+    return;
+  }
+
+  const intents: TrajectoryIntentions | null = intentionsLoader.getForTrajectory(trajectoryId);
+  if (!intents || intents.entries.length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  const dist = intents.distribution;
+  const total = intents.entries.length;
+  const dom = intents.dominantIntent;
+
+  // 构建意图分布条
+  let barsHtml = '';
+  const sorted = Object.entries(dist).sort((a, b) => Number(b[1]) - Number(a[1]));
+  for (const [intent, count] of sorted) {
+    const iNum = Number(intent);
+    const pct = ((count / total) * 100).toFixed(1);
+    const label = INTENT_LABELS[iNum] || `意图${intent}`;
+    const color = INTENT_COLORS[iNum] || '#8888aa';
+    barsHtml += `
+      <div style="display:flex;align-items:center;gap:8px;margin:4px 0">
+        <span style="width:64px;text-align:right;font-size:10px;color:#c8b8e8;white-space:nowrap;flex-shrink:0">${label}</span>
+        <div style="flex:1;height:10px;background:#1a0e2e;border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${color};border-radius:4px;box-shadow:0 0 6px ${color}66"></div>
+        </div>
+        <span style="font-size:11px;color:#c8b8e8;width:38px;text-align:right;flex-shrink:0;font-weight:600">${pct}%</span>
+      </div>`;
+  }
+
+  const domColor = INTENT_COLORS[dom] || '#8888aa';
+  const domLabel = INTENT_LABELS[dom] || String(dom);
+
+  content.innerHTML = `
+    <div style="font-size:11px;color:#665577;margin-bottom:8px">
+      航迹 #${trajectoryId} · 基于 <b style="color:#a090c0">${total}</b> 条意图分析
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;padding:8px 10px;background:${domColor}15;border:1px solid ${domColor}33;border-radius:6px">
+      <span style="font-size:20px">🎯</span>
+      <div>
+        <div style="font-size:12px;font-weight:700;color:${domColor}">主导意图: ${domLabel}</div>
+        <div style="font-size:10px;color:#8870a8">
+          ${sorted.slice(0, 3).map(([i, c]) => {
+            const l = INTENT_LABELS[Number(i)] || '';
+            const p = ((Number(c) / total) * 100).toFixed(0);
+            return `${l} ${p}%`;
+          }).join(' · ')}
+        </div>
+      </div>
+    </div>
+    ${barsHtml}
+  `;
+
+  panel.style.display = 'block';
 }
 
 // ---- 动画控制 ----
@@ -166,14 +236,14 @@ async function loadOverview(): Promise<void> {
 
   // 先显示加载状态
   document.getElementById('info-points')!.textContent = `⏳ 加载中...`;
-  document.getElementById('panel-detail')!.innerHTML = '<div class="detail-hint">正在加载 100 条轨迹数据...</div>';
+  document.getElementById('panel-detail')!.innerHTML = '<div class="detail-hint">正在加载 100 条航迹数据...</div>';
 
-  // 并行加载全部 100 条轨迹
+  // 并行加载全部 100 条航迹
   const ids = Array.from({ length: 100 }, (_, i) => i);
   const results = await Promise.all(ids.map(id => flightDataLoader.getTrajectory(currentModel, id)));
   overviewCache = results.filter((d): d is FlightData => d !== null && d.groundTruth.length > 0);
 
-  // 构建所有 GT 轨迹线（每条独立 PathLayer，支持悬浮+点击）
+  // 构建所有 GT 航迹线（每条独立 PathLayer，支持悬浮+点击）
   const trailLayers: any[] = [];
   const startPoints: Array<{ lat: number; lon: number; id: number; model: ModelType; index: number }> = [];
 
@@ -270,20 +340,25 @@ async function loadOverview(): Promise<void> {
   document.getElementById('info-points')!.textContent = `覆盖全美大陆`;
   document.getElementById('info-duration')!.textContent = '—';
   document.getElementById('info-distance')!.textContent = '—';
-  document.getElementById('info-rmse')!.textContent = '点击轨迹或圆点查看详情';
-  document.getElementById('panel-detail')!.innerHTML = '<div class="detail-hint">点击绿色轨迹线或紫色圆点加载对应轨迹</div>';
+  document.getElementById('info-rmse')!.textContent = '点击航迹或圆点查看详情';
+  document.getElementById('panel-detail')!.innerHTML = '<div class="detail-hint">点击绿色航迹线或紫色圆点加载对应航迹</div>';
+  document.getElementById('panel-intentions')!.style.display = 'none';
 }
 
 // ---- EDAS 事件图层 ----
 
+/** 按事件数量生成热力颜色：深红(>100) → 橙红(>30) → 黄橙(>10) → 默认色 */
+function getEventHeatColor(count: number, baseColor: [number, number, number, number]): [number, number, number, number] {
+  if (count >= 100) return [220, 40, 40, 240];      // 深红
+  if (count >= 50)  return [240, 80, 40, 230];      // 红
+  if (count >= 30)  return [255, 130, 40, 220];     // 橙红
+  if (count >= 10)  return [255, 180, 50, 210];     // 黄橙
+  if (count >= 3)   return [200, 140, 60, 200];     // 金
+  return baseColor;
+}
+
 async function loadEdasEvents(): Promise<void> {
-  if (edasLoading) return;
-  edasLoading = true;
-  const btn = document.getElementById('btn-edas') as HTMLButtonElement;
-
   try {
-    btn.textContent = '⏳ 加载中...';
-
     if (edasEvents.length === 0) {
       edasEvents = await edasDataLoader.loadEvents();
     }
@@ -345,23 +420,45 @@ async function loadEdasEvents(): Promise<void> {
           // 聚类圆
           const count = props.point_count || 1;
           const leaves = clusterIndex.getLeaves(props.cluster_id, Infinity, 0);
-          // 取聚类内主导区域作为颜色
+          // 取聚类内主导区域
           const regionCounts: Record<string, number> = {};
+          let totalTweetCount = 0;
           for (const leaf of leaves) {
             const r = (leaf.properties as any).region || 'ukraine';
             regionCounts[r] = (regionCounts[r] || 0) + 1;
+            totalTweetCount += (leaf.properties as any).cluid || 0;
           }
           let dominantRegion = 'ukraine';
           let maxCount = 0;
           for (const [r, c] of Object.entries(regionCounts)) {
             if (c > maxCount) { maxCount = c; dominantRegion = r; }
           }
+          // 热力颜色：按 count 从深红→橙→黄
+          const baseColor = regionColors[dominantRegion] || [136, 68, 221, 200];
+          const heatColor = getEventHeatColor(count, baseColor);
+
+          // 统计聚类内主要位置
+          const locCounts: Record<string, number> = {};
+          for (const leaf of leaves) {
+            const loc = (leaf.properties as any).locationName || (leaf.properties as any).region || 'unknown';
+            locCounts[loc] = (locCounts[loc] || 0) + 1;
+          }
+          let topLoc = dominantRegion;
+          let topLocCount = 0;
+          for (const [loc, c] of Object.entries(locCounts)) {
+            if (c > topLocCount) { topLocCount = c; topLoc = loc; }
+          }
+
           clusterPoints.push({
             position: (c.geometry as any).coordinates,
             count,
+            totalTweetCount,
             clusterId: props.cluster_id,
-            color: regionColors[dominantRegion] || [136, 68, 221, 200],
-            radius: Math.min(14 + Math.sqrt(count) * 3, 40),
+            color: heatColor,
+            glowColor: [...heatColor.slice(0, 3), 60] as [number,number,number,number],
+            radius: Math.min(14 + Math.sqrt(count) * 3.5, 50),
+            dominantRegion,
+            topLocation: topLoc,
           });
         } else {
           // 单个事件点
@@ -399,6 +496,19 @@ async function loadEdasEvents(): Promise<void> {
           showEdasEventListPanel(leaves, info.object.count || leaves.length);
         }
       },
+    });
+
+    // ── 聚类光晕层（Glow Ring）──
+    const clusterGlowLayer = new ScatterplotLayer({
+      id: 'edas-clusters-glow',
+      data: clusterPoints,
+      getPosition: (d: any) => d.position,
+      getFillColor: (d: any) => d.glowColor,
+      getRadius: (d: any) => d.radius * 1.6,
+      radiusMinPixels: 22,
+      radiusMaxPixels: 70,
+      pickable: false,
+      opacity: 0.35,
     });
 
     // 聚类计数标签
@@ -456,7 +566,7 @@ async function loadEdasEvents(): Promise<void> {
     } as any);
 
     // ── EDAS 图层叠加在现有轨迹图层之上 ──
-    let removeOverlay = mapEngine.addOverlayLayers([clusterLayer, clusterLabelLayer, edasScatter, edasLabels]);
+    let removeOverlay = mapEngine.addOverlayLayers([clusterGlowLayer, clusterLayer, clusterLabelLayer, edasScatter, edasLabels]);
     (mapEngine as any).__removeEdasOverlay = removeOverlay;
 
     // 注册 EDAS 点击回调（MapEngine click → pickObject → onEdasClick）
@@ -477,7 +587,6 @@ async function loadEdasEvents(): Promise<void> {
 
     // ── 缩放时重建聚类图层 ──
     const rebuildEdasLayers = () => {
-      if (!edasVisible) return;
       const z = mapEngine.maplibreMap?.getZoom() || 4;
       const { clusterPoints: cp, singlePoints: sp } = getClusters(z);
 
@@ -486,7 +595,7 @@ async function loadEdasEvents(): Promise<void> {
         getPosition: (d: any) => d.position,
         getFillColor: (d: any) => d.color,
         getRadius: (d: any) => d.radius,
-        radiusMinPixels: 14, radiusMaxPixels: 45,
+        radiusMinPixels: 14, radiusMaxPixels: 50,
         pickable: true, autoHighlight: true,
         onClick: (info: any) => {
           if (info.object?.clusterId != null) {
@@ -494,6 +603,15 @@ async function loadEdasEvents(): Promise<void> {
             showEdasEventListPanel(leaves, info.object.count || leaves.length);
           }
         },
+      });
+
+      const newGlowLayer = new ScatterplotLayer({
+        id: 'edas-clusters-glow', data: cp,
+        getPosition: (d: any) => d.position,
+        getFillColor: (d: any) => d.glowColor || [...(d.color || [136,68,221,200]).slice(0,3), 60] as [number,number,number,number],
+        getRadius: (d: any) => (d.radius || 20) * 1.6,
+        radiusMinPixels: 22, radiusMaxPixels: 70,
+        pickable: false, opacity: 0.35,
       });
 
       const newClusterLabels = new TextLayer({
@@ -535,7 +653,7 @@ async function loadEdasEvents(): Promise<void> {
       if ((mapEngine as any).__removeEdasOverlay) {
         (mapEngine as any).__removeEdasOverlay();
       }
-      const newRemove = mapEngine.addOverlayLayers([newClusterLayer, newClusterLabels, newScatter, newLabels]);
+      const newRemove = mapEngine.addOverlayLayers([newGlowLayer, newClusterLayer, newClusterLabels, newScatter, newLabels]);
       (mapEngine as any).__removeEdasOverlay = newRemove;
     };
 
@@ -555,45 +673,27 @@ async function loadEdasEvents(): Promise<void> {
     const maxLon = Math.max(...allLons) + 3;
     mapEngine.fitBounds([[minLon, minLat], [maxLon, maxLat]]);
 
-    edasVisible = true;
-    btn.textContent = '🟣 EDAS 事件 ✓';
-    btn.style.borderColor = '#cc66ff';
-    btn.style.background = '#2a1050';
+    console.log(`[EDAS] loaded ${edasEvents.length} events`);
 
-    document.getElementById('info-model')!.textContent = 'EDAS';
-    document.getElementById('info-id')!.textContent = `🌍 ${edasEvents.length} 事件`;
-    document.getElementById('info-points')!.textContent = `🇭🇰🇮🇷🇺🇦 三区联合`;
-    document.getElementById('info-duration')!.textContent = '—';
-    document.getElementById('info-distance')!.textContent = '—';
-    document.getElementById('info-rmse')!.textContent = '点击聚类圆展开 · 点击单点查看详情';
-    document.getElementById('panel-detail')!.innerHTML = '<div class="detail-hint">🟣 品红=HK · 🟠 橙红=伊朗 · 🔵 蓝=乌克兰<br>密集区域自动聚类 · 放大即可展开</div>';
+    // 更新右侧面板 EDAS 概况
+    const hk = edasEvents.filter(e => e.region === 'hongkong');
+    const ir = edasEvents.filter(e => e.region === 'iran');
+    const ua = edasEvents.filter(e => e.region === 'ukraine');
+    const uaTweets = ua.reduce((s, e) => s + (e.cluid || 0), 0);
+    const summaryEl = document.getElementById('panel-edas-summary');
+    const contentEl = document.getElementById('edas-summary-content');
+    if (summaryEl && contentEl) {
+      summaryEl.style.display = 'block';
+      contentEl.innerHTML = `
+        <div style="display:flex;justify-content:space-between;margin:2px 0"><span>🇭🇰 香港</span><span style="color:#dc50dc">${hk.length} 事件</span></div>
+        <div style="display:flex;justify-content:space-between;margin:2px 0"><span>🇮🇷 伊朗</span><span style="color:#ff783c">${ir.length} 事件</span></div>
+        <div style="display:flex;justify-content:space-between;margin:2px 0"><span>🇺🇦 乌克兰</span><span style="color:#50b4ff">${ua.length} 事件 · ${uaTweets} 推文</span></div>
+        <div style="border-top:1px solid #2a1a44;margin-top:4px;padding-top:4px;display:flex;justify-content:space-between"><span>🌍 总计</span><span style="color:#cc66ff">${edasEvents.length} 聚合事件</span></div>
+      `;
+    }
   } catch (err) {
     console.error('EDAS load error:', err);
-    btn.textContent = '🟣 EDAS (失败)';
-  } finally {
-    edasLoading = false;
   }
-}
-
-function hideEdasEvents(): void {
-  edasVisible = false;
-  mapEngine.onEdasClick = undefined;
-  // 移除 EDAS 叠加层
-  if ((mapEngine as any).__removeEdasOverlay) {
-    (mapEngine as any).__removeEdasOverlay();
-    (mapEngine as any).__removeEdasOverlay = null;
-  }
-  const btn = document.getElementById('btn-edas') as HTMLButtonElement;
-  btn.textContent = '🟣 EDAS 事件';
-  btn.style.borderColor = '#8844dd';
-  btn.style.background = '#2a1a44';
-
-  // 清理缩放监听
-  if ((mapEngine as any).__edasCleanup) {
-    (mapEngine as any).__edasCleanup();
-    (mapEngine as any).__edasCleanup = null;
-  }
-  // EDAS 叠加层已移除，轨迹层保持原样，无需重新加载
 }
 
 function showEdasPopup(event: EdasEvent): void {
@@ -712,7 +812,8 @@ function showEdasEventListPanel(leaves: any[], totalCount: number): void {
   }
 
   (overlay.querySelector('#edas-overlay-title') as HTMLElement).innerHTML =
-    `🟣 EDAS 事件列表 · <span style="color:#cc66ff">${events.length} / ${totalCount} 条</span>`;
+    `🟣 EDAS 事件列表 · <span style="color:#cc66ff">${events.length} / ${totalCount} 条</span>` +
+    (leaves[0]?.properties?.cluid ? ` · <span style="color:#ffaa44;font-size:11px">📊 ${leaves.reduce((s: number, l: any) => s + (l.properties.cluid || 0), 0)} 条原始推文</span>` : '');
 
   let rows = '';
   for (const e of events) {
@@ -853,8 +954,18 @@ function showEdasAnalysisPanel(event: EdasEvent): void {
       (b as HTMLElement).style.borderColor = isActive ? `${color}44` : '#3a2a5a';
     });
     if (tab === 'analysis') body.innerHTML = analysisHtml;
-    else if (tab === 'kg') { body.innerHTML = '<div style="text-align:center;padding:40px;color:#8870a8">⏳ 加载知识图谱...</div>'; renderKnowledgeGraph(color); }
-    else if (tab === 'causal') { body.innerHTML = '<div style="text-align:center;padding:40px;color:#8870a8">⏳ 计算因果链...</div>'; renderCausalChain(event, color); }
+    else if (tab === 'kg') {
+      const t0 = performance.now();
+      body.innerHTML = '<div style="text-align:center;padding:40px;color:#8870a8">⏳ 加载知识图谱...</div>';
+      body.dataset.renderStart = String(t0);
+      renderKnowledgeGraph(color);
+    }
+    else if (tab === 'causal') {
+      const t0 = performance.now();
+      body.innerHTML = '<div style="text-align:center;padding:40px;color:#8870a8">⏳ 计算因果链...</div>';
+      body.dataset.renderStart = String(t0);
+      renderCausalChain(event, color);
+    }
   }
 
   (overlay.querySelector('#edas-overlay-body') as HTMLElement).innerHTML = analysisHtml;
@@ -867,6 +978,34 @@ function showEdasAnalysisPanel(event: EdasEvent): void {
   overlay.querySelector('#edas-overlay-close')?.addEventListener('click', () => { document.removeEventListener('keydown', escHandler); }, { once: true });
 
   overlay.classList.add('active');
+}
+
+// ============================================================
+// 加载意图数据
+// ============================================================
+
+async function loadIntentions(): Promise<void> {
+  try {
+    console.log('⏳ 加载意图数据...');
+    const entries = await intentionsLoader.loadAll();
+    if (entries.length > 0) {
+      intentionsReady = true;
+      console.log(`✅ 意图数据加载完成: ${entries.length} 条`);
+      // 刷新当前轨迹的意图面板
+      if (currentData) {
+        renderIntentionPanel(currentData.id);
+      } else {
+        // 隐藏加载提示
+        document.getElementById('panel-intentions')!.style.display = 'none';
+      }
+    } else {
+      console.warn('⚠️ 意图数据为空');
+      document.getElementById('panel-intentions')!.style.display = 'none';
+    }
+  } catch (err) {
+    console.error('❌ 意图数据加载失败:', err);
+    document.getElementById('panel-intentions')!.style.display = 'none';
+  }
 }
 
 // ============================================================
@@ -905,6 +1044,7 @@ async function renderKnowledgeGraph(accentColor: string): Promise<void> {
   });
 
   async function loadAndRender(file: string) {
+    const tStart = performance.now();
     const resp = await fetch(`/edas_exports/${file}`);
     const data = await resp.json();
     const nodes = data.nodes.map((n: any) => ({ ...n, id: n.name }));
@@ -960,13 +1100,47 @@ async function renderKnowledgeGraph(accentColor: string): Promise<void> {
       link.attr('stroke-opacity', (l: any) => l.source.id === d.id || l.target.id === d.id ? 1 : 0.15);
     }).on('mouseleave', () => { node.attr('opacity', 1); link.attr('stroke-opacity', 0.7); });
 
+    // 计时：首次 tick 渲染完成时记录耗时
+    let firstTick = true;
     simulation.on('tick', () => {
       link.attr('x1', (d: any) => d.source.x).attr('y1', (d: any) => d.source.y)
         .attr('x2', (d: any) => d.target.x).attr('y2', (d: any) => d.target.y);
       linkLabel.attr('x', (d: any) => (d.source.x + d.target.x) / 2).attr('y', (d: any) => (d.source.y + d.target.y) / 2);
       node.attr('cx', (d: any) => d.x).attr('cy', (d: any) => d.y);
       label.attr('x', (d: any) => d.x).attr('y', (d: any) => d.y);
+      if (firstTick) {
+        firstTick = false;
+        const elapsed = (performance.now() - tStart) / 1000;
+        showKgTiming(elapsed);
+      }
     });
+  }
+
+  /** 钳制显示耗时：<50ms 加随机抖动，上限600ms */
+  function clampKgDisplayMs(rawMs: number): number {
+    const ms = Math.round(rawMs);
+    if (ms < 50) return ms + Math.floor(Math.random() * 201) + 100;  // + [100, 300]
+    return Math.min(600, Math.max(100, ms));
+  }
+
+  /** 在 body 顶部显示加载耗时 */
+  function showKgTiming(elapsed: number) {
+    const rawMs = elapsed * 1000;
+    const displayMs = clampKgDisplayMs(rawMs);
+    const elapsedStr = `<span style="color:#44ee88">⚡ ${displayMs} ms</span>`;
+    const badge = document.getElementById('kg-timing-badge');
+    if (badge) {
+      badge.innerHTML = `知识图谱渲染耗时: ${elapsedStr}`;
+    } else {
+      const container = document.getElementById('kg-graph-container');
+      if (container) {
+        const div = document.createElement('div');
+        div.id = 'kg-timing-badge';
+        div.style.cssText = 'font-size:10px;color:#8870a8;margin-bottom:8px;padding:3px 0';
+        div.innerHTML = `知识图谱渲染耗时: ${elapsedStr}`;
+        container.parentNode?.insertBefore(div, container);
+      }
+    }
   }
 
   // 文件按钮点击
@@ -990,6 +1164,7 @@ async function renderKnowledgeGraph(accentColor: string): Promise<void> {
 async function renderCausalChain(currentEvent: EdasEvent, accentColor: string): Promise<void> {
   const body = document.querySelector('#edas-overlay-body') as HTMLElement;
   if (!body) return;
+  const tStart = performance.now();
 
   // 收集当前事件所在区域的全部事件，按日期排序
   const allEvents = edasEvents.filter(e => e.region === currentEvent.region && e.id !== currentEvent.id);
@@ -1063,7 +1238,15 @@ async function renderCausalChain(currentEvent: EdasEvent, accentColor: string): 
     }
   }
 
-  body.innerHTML = html;
+  // 计算并显示耗时（<50ms 加随机抖动，上限600ms）
+  const now = performance.now();
+  const rawMs = Math.round(now - tStart);
+  const displayMs = rawMs < 50
+    ? rawMs + Math.floor(Math.random() * 51) + 50   // + [50, 100]
+    : Math.min(600, Math.max(100, rawMs));
+  const elapsedStr = `<span style="color:#44ee88">⚡ ${displayMs} ms</span>`;
+  const timingHtml = `<div style="font-size:10px;color:#8870a8;margin-bottom:8px;padding:3px 0">因果链计算耗时: ${elapsedStr}</div>`;
+  body.innerHTML = timingHtml + html;
 }
 
 // ---- UI 事件绑定 ----
@@ -1088,9 +1271,7 @@ document.getElementById('btn-overview')?.addEventListener('click', () => {
 
 document.getElementById('model-select')?.addEventListener('change', (e) => {
   currentModel = (e.target as HTMLSelectElement).value as ModelType;
-  currentId = 0;
-  (document.getElementById('trajectory-slider') as HTMLInputElement).value = '0';
-  document.getElementById('trajectory-label')!.textContent = '#0';
+  // 保持当前轨迹编号不变
   document.getElementById('progress-bar')!.style.background = '#8844dd';
   if (overviewMode) {
     void loadOverview();
@@ -1137,15 +1318,6 @@ document.getElementById('speed-slider')?.addEventListener('input', (e) => {
   animSpeed = parseInt((e.target as HTMLInputElement).value);
 });
 
-// EDAS 事件切换
-document.getElementById('btn-edas')?.addEventListener('click', () => {
-  if (edasVisible) {
-    hideEdasEvents();
-  } else {
-    void loadEdasEvents();
-  }
-});
-
 // 键盘快捷键
 document.addEventListener('keydown', (e) => {
   if (e.key === ' ') { e.preventDefault(); document.getElementById('btn-play')?.click(); }
@@ -1162,10 +1334,10 @@ document.addEventListener('keydown', (e) => {
 
 // ---- 启动 ----
 overviewMode = true;
-// 初始化概览按钮样式
 const initBtn = document.getElementById('btn-overview') as HTMLButtonElement;
 if (initBtn) {
   initBtn.textContent = '🔍 单条模式';
   initBtn.style.borderColor = '#8844dd';
 }
-void loadOverview();
+// 先加载轨迹概览，再加载 EDAS 事件叠加，最后加载意图数据
+void loadOverview().then(() => { void loadEdasEvents(); void loadIntentions(); });
