@@ -4,8 +4,91 @@
 // ============================================================
 
 import type { EdasEvent, EdasDataSource, EdasRegion } from '@/types';
+import type { EdasEventType } from '@/types';
 
 const EDAS_BASE = '/edas_exports';
+
+// ============================================================
+// 事件类型推断 — 以关键词为主，区域仅作微弱先验
+// ============================================================
+
+/** 从区域 + 关键词 + 摘要推断事件类型 */
+function inferEventType(region: EdasRegion, keywords: Record<string, number>, summary: string = ''): EdasEventType {
+  const text = (Object.keys(keywords).join(' ') + ' ' + summary).toLowerCase();
+
+  // ── 抗议/示威类 ──
+  const protestKw = [
+    'protest', 'demonstration', 'march', 'rally', '示威', '抗议', '游行', '集会', '集會',
+    'petition', 'boycott', '罢课', '罢市', '罢工', 'strike', 'riot', '骚乱', '暴乱',
+    '民主', 'democracy', '人权', 'human right', '自由', 'freedom', '自治', 'autonomy',
+    'activist', '活动人士', '维权', '申诉', ' dissent',
+  ];
+  // ── 冲突/战争类 ──
+  const conflictKw = [
+    'attack', 'strike', 'shelling', 'bombing', 'explosion', 'casualty', 'killed',
+    '攻击', '袭击', '炮击', '爆炸', '轰炸', 'bomb', '伤亡', '死者', '受伤',
+    'missile', '导弹', 'drone', '无人机', '空袭', 'air strike', 'airstrike', 'air raid',
+    'battle', '战斗', '交火', 'clash', 'offensive', '攻势', 'counter', '反攻',
+    'war', '战争', 'invasion', '入侵', '占领', 'occupy', 'gunfire', '枪击',
+    'rocket', '火箭弹', 'mortar', '迫击炮', 'artillery', '炮火', 'sniper', '狙击',
+  ];
+  // ── 军事活动类 ──
+  const militaryKw = [
+    'military', '军事', 'troops', '军队', 'deployment', '部署', 'exercise', '演习',
+    'drill', 'navy', '海军', 'air force', '空军', 'army', '陆军', 'forces',
+    'regiment', 'brigade', 'division', '旅', '师', '团', '基地', 'base',
+    'mobilization', '动员', 'defense', '国防', 'weapon', '武器', 'missile system',
+    '雷达', 'radar', '舰队', 'fleet', '战机', 'jet', 'fighter', '轰炸机', 'bomber',
+    '巡逻', 'patrol', '警戒', 'alert', '战备', '备战',
+  ];
+  // ── 政治/外交类 ──
+  const politicalKw = [
+    'sanction', '制裁', 'diplomat', '外交', 'summit', '峰会', 'meeting', '会谈',
+    'negotiation', '谈判', 'treaty', '条约', 'agreement', '协议', 'ceasefire', '停火',
+    'election', '选举', 'vote', '投票', 'president', '总统', 'minister', '部长',
+    'parliament', '议会', 'congress', '国会', 'legislation', '立法', 'resolution', '决议',
+    'statement', '声明', 'condemn', '谴责', 'ally', '盟友', 'coalition', '联盟',
+  ];
+  // ── 灾害/事故类 ──
+  const disasterKw = [
+    'earthquake', '地震', 'flood', '洪水', 'typhoon', '台风', 'hurricane', '飓风',
+    'fire', '火灾', 'explosion accident', '事故', 'crash', '坠毁', '坠机',
+    'casualty disaster', '救援', 'rescue', 'evacuation', '疏散', 'emergency', '紧急状态',
+  ];
+
+  let protestScore = 0, conflictScore = 0, militaryScore = 0, politicalScore = 0, disasterScore = 0;
+  for (const kw of protestKw) { if (text.includes(kw)) protestScore++; }
+  for (const kw of conflictKw) { if (text.includes(kw)) conflictScore++; }
+  for (const kw of militaryKw) { if (text.includes(kw)) militaryScore++; }
+  for (const kw of politicalKw) { if (text.includes(kw)) politicalScore++; }
+  for (const kw of disasterKw) { if (text.includes(kw)) disasterScore++; }
+
+  // 加权：冲突类关键词重叠多说明是核心主题
+  conflictScore *= 1.5;
+  // 抗议类在非冲突语境加权
+  if (conflictScore === 0) protestScore *= 1.2;
+
+  // 非常弱的区域先验（仅打破平局，不超过+1）
+  if (region === 'hongkong' && protestScore > 0 && conflictScore === 0) protestScore += 0.5;
+  if (region === 'ukraine' && conflictScore > 0) conflictScore += 0.5;
+  if (region === 'iran' && militaryScore > 0 && conflictScore === 0) militaryScore += 0.5;
+
+  // 如果冲突+军事都高 → 军事活动（演习/部署等非直接交火场景）
+  // 如果冲突单独高 → 冲突
+  // 如果军事单独高 → 军事活动
+  // 如果抗议高且无冲突 → 抗议
+  const allScores = [
+    { type: '冲突' as EdasEventType, score: conflictScore },
+    { type: '军事活动' as EdasEventType, score: militaryScore },
+    { type: '抗议' as EdasEventType, score: protestScore },
+  ];
+  allScores.sort((a, b) => b.score - a.score);
+
+  if (allScores[0].score > 0) return allScores[0].type;
+  if (politicalScore > 0) return '其他';  // 政治事件暂归为"其他"
+  if (disasterScore > 0) return '其他';   // 灾害事件暂归为"其他"
+  return '其他';
+}
 
 // ============================================================
 // 地理编码表 — 从事件摘要中提取地名 → 坐标映射
@@ -195,6 +278,7 @@ export class EdasDataLoader implements EdasDataSource {
           date: item.date_dir || '',
           summary,
           keywords: segments,
+          eventType: inferEventType(region, segments, summary),
           bursty: !!item.bursty,
           lon: geo.lon,
           lat: geo.lat,
@@ -281,6 +365,7 @@ export class EdasDataLoader implements EdasDataSource {
           date: g.dates[0] || '',
           summary: fullSummary,
           keywords: topKw,
+          eventType: inferEventType('ukraine', topKw, fullSummary),
           bursty: dominantLevel === '特别重大事件' || tweetCount >= 5,
           level: dominantLevel,
           cluid: tweetCount, // 借 cluid 存推文数量

@@ -104,6 +104,9 @@ export interface PointDataSource {
 /** EDAS 事件等级 */
 export type EdasEventLevel = '一般事件' | '较大事件' | '重大事件' | '特别重大事件';
 
+/** EDAS 事件类型 */
+export type EdasEventType = '抗议' | '冲突' | '军事活动' | '其他';
+
 /** EDAS 事件区域 */
 export type EdasRegion = 'hongkong' | 'iran' | 'ukraine';
 
@@ -119,9 +122,11 @@ export interface EdasEvent {
   summary: string;
   /** 关键词及其权重 */
   keywords: Record<string, number>;
+  /** 事件类型（抗议/冲突/军事活动/其他） */
+  eventType: EdasEventType;
   /** 是否突发 */
   bursty: boolean;
-  /** 事件等级 (乌克兰数据) */
+  /** 事件等级 (重大/一般/较大/特别重大) */
   level?: EdasEventLevel;
   /** 聚类 ID (乌克兰数据) */
   cluid?: number;

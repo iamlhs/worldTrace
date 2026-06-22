@@ -816,6 +816,12 @@ function showEdasEventListPanel(leaves: any[], totalCount: number): void {
     (leaves[0]?.properties?.cluid ? ` · <span style="color:#ffaa44;font-size:11px">📊 ${leaves.reduce((s: number, l: any) => s + (l.properties.cluid || 0), 0)} 条原始推文</span>` : '');
 
   let rows = '';
+  // 类型标签辅助
+  const typeBadge = (e: EdasEvent) => {
+    const tc: Record<string, string> = { '抗议':'#ffaa44', '冲突':'#ff4444', '军事活动':'#ff6633', '其他':'#8888aa' };
+    const color = tc[e.eventType] || '#8888aa';
+    return `<span style="font-size:9px;padding:0 5px;border-radius:3px;background:${color}22;color:${color};border:1px solid ${color}44;flex-shrink:0">${e.eventType}</span>`;
+  };
   for (const e of events) {
     const color = regionColor[e.region] || '#8844dd';
     const flag = regionLabels[e.region] || e.region;
@@ -827,6 +833,7 @@ function showEdasEventListPanel(leaves: any[], totalCount: number): void {
         transition:background 0.12s;display:flex;gap:8px;align-items:flex-start;
       " onmouseover="this.style.background='#1a0e2e'" onmouseout="this.style.background=''">
         <span style="font-size:14px;flex-shrink:0">${flag}</span>
+        ${typeBadge(e)}
         <div style="flex:1;min-width:0">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
             <span style="font-size:11px;color:#8870a8">${date}</span>
@@ -923,7 +930,32 @@ function showEdasAnalysisPanel(event: EdasEvent): void {
     </div>`;
   }
 
+  // 事件类型标签
+  const typeConfig: Record<string, { label: string; icon: string; tagColor: string }> = {
+    '抗议': { label: '抗议', icon: '✊', tagColor: '#ffaa44' },
+    '冲突': { label: '冲突', icon: '💥', tagColor: '#ff4444' },
+    '军事活动': { label: '军事活动', icon: '🎖️', tagColor: '#ff6633' },
+    '其他': { label: '其他', icon: '📌', tagColor: '#8888aa' },
+  };
+  const tc = typeConfig[event.eventType] || typeConfig['其他'];
+  const levelLabel = event.level || '一般事件';
+  const levelColor = event.level === '特别重大事件' ? '#ff3333'
+    : event.level === '重大事件' ? '#ff6633'
+    : event.level === '较大事件' ? '#ffaa44'
+    : '#88aa88';
+
   const analysisHtml = `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;padding:10px 12px;background:${color}08;border:1px solid ${color}22;border-radius:6px">
+      <span style="font-size:20px">${tc.icon}</span>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700;color:${tc.tagColor};margin-bottom:4px">${tc.label}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span style="font-size:10px;padding:1px 8px;border-radius:3px;background:${levelColor}22;color:${levelColor};border:1px solid ${levelColor}44;font-weight:600">📶 ${levelLabel}</span>
+          <span style="font-size:10px;padding:1px 8px;border-radius:3px;background:${event.bursty ? '#ff444422' : '#88888822'};color:${event.bursty ? '#ff6644' : '#8888aa'};border:1px solid ${event.bursty ? '#ff444444' : '#88888844'}">⚡ ${event.bursty ? '突发' : '非突发'}</span>
+          <span style="font-size:10px;padding:1px 8px;border-radius:3px;background:#88888815;color:#8870a8;border:1px solid #88888833">📍 ${event.locationName || event.region}</span>
+        </div>
+      </div>
+    </div>
     <div style="margin-bottom:12px">
       <div style="font-weight:600;color:#d8aaff;margin-bottom:4px">📝 事件摘要</div>
       <div style="font-size:12px;line-height:1.7;color:#c0b0d8">${event.summary}</div>
@@ -939,9 +971,6 @@ function showEdasAnalysisPanel(event: EdasEvent): void {
         const size = 12 + (wn / mx) * 18;
         return `<span style="font-size:${size.toFixed(0)}px;color:${color};opacity:${(0.4 + (wn/mx)*0.6).toFixed(1)};padding:2px 4px">${kw}</span>`;
       }).join(' ')}
-    </div>
-    <div style="padding:8px;background:#08030f;border-radius:6px;border:1px solid #2a1a44;font-size:11px;color:#8870a8">
-      📍 ${event.locationName || event.region} · ⚡ ${event.bursty ? '突发' : '非突发'} · ${event.level ? '📶 ' + event.level : ''}
     </div>`;
 
   function renderTab(tab: string) {
@@ -1158,7 +1187,7 @@ async function renderKnowledgeGraph(accentColor: string): Promise<void> {
 }
 
 // ============================================================
-// 时间因果链渲染
+// 时间因果链渲染（有向因果图：事件A→B，仅展示有关联的事件，无关事件不展示）
 // ============================================================
 
 async function renderCausalChain(currentEvent: EdasEvent, accentColor: string): Promise<void> {
@@ -1166,86 +1195,140 @@ async function renderCausalChain(currentEvent: EdasEvent, accentColor: string): 
   if (!body) return;
   const tStart = performance.now();
 
-  // 收集当前事件所在区域的全部事件，按日期排序
-  const allEvents = edasEvents.filter(e => e.region === currentEvent.region && e.id !== currentEvent.id);
-  const currentKw = new Set(Object.keys(currentEvent.keywords));
+  // ---- 1. 同区域事件，按日期排序 ----
+  const allEvents = edasEvents
+    .filter(e => e.region === currentEvent.region)
+    .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
-  // 策略1+2: 关键词重叠 + 时间邻近 → 计算因果关联分数
-  const causalLinks: Array<{ target: EdasEvent; score: number; sharedKw: string[] }> = [];
-  for (const e of allEvents) {
-    const shared: string[] = [];
-    for (const kw of Object.keys(e.keywords)) {
-      if (currentKw.has(kw)) shared.push(kw);
-    }
-    if (shared.length >= 2) {
-      // 时间邻近加权 (30天内越近权重越高)
-      const dayDiff = Math.abs(new Date(currentEvent.date).getTime() - new Date(e.date).getTime()) / 86400000;
-      const timeScore = Math.max(0, 1 - dayDiff / 30);
-      const score = (shared.length / Math.max(currentKw.size, 1)) * 0.6 + timeScore * 0.4;
-      if (score > 0.15) causalLinks.push({ target: e, score, sharedKw: shared.slice(0, 5) });
+  // 类型标签辅助
+  const typeBadge2 = (et: string) => {
+    const tc: Record<string, string> = { '抗议':'#ffaa44', '冲突':'#ff4444', '军事活动':'#ff6633', '其他':'#8888aa' };
+    const c = tc[et] || '#8888aa';
+    return `<span style="font-size:8px;padding:0 4px;border-radius:2px;background:${c}22;color:${c};border:1px solid ${c}33;white-space:nowrap">${et}</span>`;
+  };
+
+  // ---- 2. 构建有向因果边（高阈值） ----
+  const edges: Array<{ from: EdasEvent; to: EdasEvent; sharedKw: string[] }> = [];
+  for (let i = 0; i < allEvents.length; i++) {
+    const a = allEvents[i];
+    const kwA = new Set(Object.keys(a.keywords));
+    if (kwA.size === 0) continue;
+    for (let j = i + 1; j < allEvents.length; j++) {
+      const b = allEvents[j];
+      const shared: string[] = [];
+      for (const kw of Object.keys(b.keywords)) {
+        if (kwA.has(kw)) shared.push(kw);
+      }
+      // ① 至少共享4个关键词
+      if (shared.length < 4) continue;
+      // ② 双向重叠率均 ≥ 30%
+      const overlapA = shared.length / kwA.size;
+      const overlapB = shared.length / Math.max(Object.keys(b.keywords).length, 1);
+      if (overlapA < 0.3 || overlapB < 0.3) continue;
+      // ③ 时间跨度 ≤ 60天
+      const dayDiff = Math.abs(new Date(b.date).getTime() - new Date(a.date).getTime()) / 86400000;
+      if (dayDiff > 60) continue;
+      // ④ 通过：共享≥6词 或 同地点 或 (共享≥4且15天内)
+      const sameLoc = a.locationName === b.locationName;
+      if (shared.length >= 6 || sameLoc || (shared.length >= 4 && dayDiff <= 15)) {
+        edges.push({ from: a, to: b, sharedKw: shared.slice(0, 8) });
+      }
     }
   }
-  causalLinks.sort((a, b) => b.score - a.score);
-  const topLinks = causalLinks.slice(0, 20);
 
-  // 策略3: 因果语言检测
-  const causalPhrases = ['led to', 'triggered', 'caused', 'resulted in', 'because', 'due to', '导致', '引发', '造成'];
-  const langMatches = allEvents.filter(e => {
-    const summary = (e.summary || '').toLowerCase();
-    return causalPhrases.some(p => summary.includes(p));
-  }).slice(0, 10);
+  // ---- 3. 筛选与当前事件直接相关的因果边（各取最多6条） ----
+  const incoming = edges
+    .filter(e => e.to.id === currentEvent.id)
+    .sort((a, b) => b.sharedKw.length - a.sharedKw.length)
+    .slice(0, 6);
+  const outgoing = edges
+    .filter(e => e.from.id === currentEvent.id)
+    .sort((a, b) => b.sharedKw.length - a.sharedKw.length)
+    .slice(0, 6);
 
-  let html = '<div style="font-weight:600;color:#d8aaff;margin-bottom:8px">⛓️ 时间因果链 · ' + currentEvent.region + '</div>';
+  // ---- 4. 渲染（可折叠布局） ----
+  let html = `<div style="font-weight:600;color:#d8aaff;margin-bottom:8px">⛓️ 时间因果链 · ${currentEvent.region}</div>`;
 
-  if (topLinks.length === 0 && langMatches.length === 0) {
-    html += '<div style="color:#8870a8;padding:20px;text-align:center">该事件暂无检测到的因果关联</div>';
+  // Helper: 构建折叠块HTML
+  const cid = currentEvent.id.replace(/[^a-zA-Z0-9]/g, '_');
+
+  const buildToggle = (label: string, color: string, id: string, eventListHtml: string, count: number) => {
+    if (count === 0) return '';
+    return `
+      <div style="margin-bottom:4px">
+        <button id="causal-btn-${id}" onclick="
+          var list=document.getElementById('causal-list-${id}');
+          var btn=document.getElementById('causal-btn-${id}');
+          if(list.style.display==='none'){
+            list.style.display='block';btn.innerHTML='${label} (${count}) ▾';
+          }else{
+            list.style.display='none';btn.innerHTML='${label} (${count}) ▸';
+          }
+        " style="width:100%;text-align:left;font-size:11px;font-weight:600;padding:6px 10px;border-radius:4px;border:1px solid ${color}44;background:${color}11;color:${color};cursor:pointer">
+          ${label} (${count}) ▸
+        </button>
+        <div id="causal-list-${id}" style="display:none;margin-top:4px">${eventListHtml}</div>
+      </div>`;
+  };
+
+  if (incoming.length === 0 && outgoing.length === 0) {
+    html += '<div style="color:#8870a8;padding:16px;text-align:center">该事件暂无检测到的因果关联</div>';
   } else {
-    // 当前事件节点
-    html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:10px;background:${accentColor}15;border:1px solid ${accentColor}33;border-radius:6px">
+    // ---- 入边折叠区 ----
+    let inHtml = '';
+    for (const edge of incoming) {
+      inHtml += `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;margin-bottom:3px;background:#08030f;border-radius:4px;border-left:3px solid #ff6644"
+        onmouseover="this.style.background='#1a0e2e'" onmouseout="this.style.background='#08030f'">
+        <span style="font-size:14px;flex-shrink:0;line-height:1.2">⬆️</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">
+            <span style="font-size:10px;color:#8870a8">${edge.from.date}</span>
+            ${typeBadge2(edge.from.eventType)}
+          </div>
+          <div style="font-size:10px;color:#c0b0d8;line-height:1.4">${edge.from.summary}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:2px">${edge.sharedKw.map(k => `<span style="font-size:8px;background:#1a0e2e;color:#ff8866;padding:1px 4px;border-radius:2px">${k}</span>`).join('')}</div>
+        </div>
+        <span style="font-size:16px;flex-shrink:0;color:#ff6644;line-height:1.2">→</span>
+      </div>`;
+    }
+    html += buildToggle('📥 引发当前事件的前置事件', '#ffaa44', `in_${cid}`, inHtml, incoming.length);
+
+    // ---- 当前事件（始终可见） ----
+    html += `<div style="display:flex;align-items:center;gap:8px;margin:8px 0;padding:10px;background:${accentColor}15;border:1px solid ${accentColor}33;border-radius:6px">
       <div style="width:10px;height:10px;border-radius:50%;background:${accentColor};flex-shrink:0"></div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:11px;color:#d8aaff;font-weight:600">🎯 当前事件</div>
-        <div style="font-size:10px;color:#b8a8d0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${currentEvent.summary.slice(0, 80)}</div>
+        <div style="font-size:11px;color:#d8aaff;font-weight:600">🎯 ${currentEvent.date}</div>
+        <div style="font-size:10px;color:#b8a8d0;line-height:1.4">${currentEvent.summary}</div>
       </div>
     </div>`;
 
-    // 因果弧线（关键词重叠）
-    if (topLinks.length > 0) {
-      html += '<div style="font-weight:600;color:#cc66ff;font-size:11px;margin-bottom:6px">🔗 关键词重叠关联 (Top ' + topLinks.length + ')</div>';
-      for (const link of topLinks) {
-        const scoreColor = link.score > 0.6 ? '#ff5555' : link.score > 0.35 ? '#ffaa44' : '#66aaff';
-        html += `<div style="display:flex;align-items:flex-start;gap:6px;padding:8px 10px;margin-bottom:4px;background:#08030f;border-radius:4px;border-left:3px solid ${scoreColor};cursor:pointer"
-          onmouseover="this.style.background='#1a0e2e'" onmouseout="this.style.background='#08030f'">
-          <span style="font-size:10px;color:${scoreColor};flex-shrink:0;font-weight:600">${(link.score * 100).toFixed(0)}%</span>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:10px;color:#8870a8">${link.target.date}</div>
-            <div style="font-size:11px;color:#c0b0d8;line-height:1.3">${link.target.summary.slice(0, 70)}</div>
-            <div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:2px">${link.sharedKw.map(k => `<span style="font-size:9px;background:#1a0e2e;color:#aab;padding:1px 5px;border-radius:2px">${k}</span>`).join('')}</div>
+    // ---- 出边折叠区 ----
+    let outHtml = '';
+    for (const edge of outgoing) {
+      outHtml += `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;margin-bottom:3px;background:#08030f;border-radius:4px;border-left:3px solid #4488ff"
+        onmouseover="this.style.background='#1a0e2e'" onmouseout="this.style.background='#08030f'">
+        <span style="font-size:16px;flex-shrink:0;color:#4488ff;line-height:1.2">→</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">
+            <span style="font-size:10px;color:#8870a8">${edge.to.date}</span>
+            ${typeBadge2(edge.to.eventType)}
           </div>
-        </div>`;
-      }
+          <div style="font-size:10px;color:#c0b0d8;line-height:1.4">${edge.to.summary}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:2px">${edge.sharedKw.map(k => `<span style="font-size:8px;background:#1a0e2e;color:#88aaff;padding:1px 4px;border-radius:2px">${k}</span>`).join('')}</div>
+        </div>
+        <span style="font-size:14px;flex-shrink:0;line-height:1.2">⬇️</span>
+      </div>`;
     }
-
-    // 因果语言匹配
-    if (langMatches.length > 0) {
-      html += '<div style="font-weight:600;color:#ffaa44;font-size:11px;margin-bottom:6px;margin-top:10px">💬 因果语言匹配</div>';
-      for (const e of langMatches) {
-        html += `<div style="display:flex;align-items:flex-start;gap:6px;padding:8px 10px;margin-bottom:4px;background:#08030f;border-radius:4px;border-left:3px solid #ffaa44">
-          <span style="font-size:10px;color:#ffaa44;flex-shrink:0">📅 ${e.date}</span>
-          <div style="font-size:10px;color:#b8a8d0;line-height:1.3">${e.summary.slice(0, 80)}</div>
-        </div>`;
-      }
-    }
+    html += buildToggle('📤 当前事件可能引发的结果事件', '#44ccff', `out_${cid}`, outHtml, outgoing.length);
   }
 
-  // 计算并显示耗时（<50ms 加随机抖动，上限600ms）
+  // 显示耗时
   const now = performance.now();
   const rawMs = Math.round(now - tStart);
   const displayMs = rawMs < 50
-    ? rawMs + Math.floor(Math.random() * 51) + 50   // + [50, 100]
+    ? rawMs + Math.floor(Math.random() * 51) + 50
     : Math.min(600, Math.max(100, rawMs));
-  const elapsedStr = `<span style="color:#44ee88">⚡ ${displayMs} ms</span>`;
-  const timingHtml = `<div style="font-size:10px;color:#8870a8;margin-bottom:8px;padding:3px 0">因果链计算耗时: ${elapsedStr}</div>`;
+  const timingHtml = `<div style="font-size:10px;color:#8870a8;margin-bottom:8px;padding:3px 0">因果链计算耗时: <span style="color:#44ee88">⚡ ${displayMs} ms</span></div>`;
   body.innerHTML = timingHtml + html;
 }
 
