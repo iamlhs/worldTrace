@@ -1,4 +1,37 @@
 // ============================================================
+// 页面路由 — 顶部导航栏切换
+// ============================================================
+
+document.querySelectorAll('#top-nav button[data-page]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const page = (btn as HTMLElement).dataset.page!;
+    // 切换按钮 active 状态
+    document.querySelectorAll('#top-nav button[data-page]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    // vessel / event 共享地图，只切换右侧面板
+    if (page === 'vessel' || page === 'event') {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.panel-side').forEach(p => p.classList.remove('active'));
+      document.getElementById(`panel-${page}`)!.classList.add('active');
+      document.body.classList.remove('has-fullpage');
+      // 切换地图中心
+      if (page === 'vessel') {
+        mapEngine.fitBounds([[-130, 20], [-60, 52]]);   // 北美大陆
+      } else {
+        mapEngine.fitBounds([[20, 5], [150, 60]]);       // 亚洲（覆盖香港/伊朗/乌克兰）
+      }
+    } else {
+      // finance / video / tcm 占满全屏
+      document.querySelectorAll('.panel-side').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.getElementById(`page-${page}`)!.classList.add('active');
+      document.body.classList.add('has-fullpage');
+    }
+  });
+});
+
+// ============================================================
 // 船舶航迹可视化系统 — 主入口
 // 包含: 航迹加载、动画控制、搜索定位、信息面板
 // ============================================================

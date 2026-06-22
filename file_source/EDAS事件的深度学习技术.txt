@@ -1,0 +1,90 @@
+Optimized tool selection
+
+Searching codebase for "这个系统里实现的基于事件的生成的知识图谱或者关系链等功能（而不是静态的），是否使用了神经网络、注意力机制等等来训练模型得到的，在哪"
+
+让我深入探索系统的算法实现，看是否使用了神经网络/注意力机制来训练模型。
+
+已完成: *给出结论* (5/5)
+
+经过全面深入的分析，以下是完整结论：
+
+---
+
+## 结论：**是的，系统使用了深度学习技术，但不是用来训练知识图谱**
+
+### 系统使用的深度学习/注意力机制
+
+从 requirements.txt 和反编译 `.pyc` 分析来看，系统确实依赖了深度学习和 NLP 技术：
+
+| 技术 | 用途 | 证据 |
+|------|------|------|
+| **TensorFlow 1.x** | 深度学习框架 | `main.pyc` 中有 `import tensorflow as tf` + `tf.get_default_graph()` + `graph.as_default()` |
+| **PyTorch + CRF** | 序列标注（NER） | `pytorch-crf==0.7.0` |
+| **HuggingFace Transformers** | 预训练语言模型（含注意力机制） | `transformers==2.8.0`（BERT 等） |
+| **Keras** | 高层神经网络 API | `Keras==2.2.4` |
+| **sentencepiece / tokenizers** | BERT 分词 | 用于预训练模型的 tokenizer |
+
+### 这些深度学习用在哪里？
+
+从 `main.pyc` 的**路由**和 **`utils/` 模块名**推断：
+
+```
+main.py 路由：
+├── /event_data        → 事件概览（调用 tweet_event → 统计/聚类）
+├── /get_stackchart_data → 堆叠图数据（调用 stackchart → 推文量时序）
+├── /get_timeline_data → 时间线（调用 Timeline → 按日期聚合摘要）
+├── /chart             → 图表数据（调用 line_chart → 折线图）
+├── /kg_chart          → KG图谱数据（调用 KG_chainchart → 查MongoDB）
+├── /gen_npm           → NPM依赖图（调用 ... → 查MongoDB）
+├── /gen_tree          → 树状图（调用 generate_chart_3 → 层级数据）
+├── /date_cloud /id_cloud → 词云（调用 cloud_process）
+├── /time_process      → 时间处理
+├── /token             → 令牌/分词（可能调用了 TF/PyTorch 模型做NER）
+└── /sketch/upload     → 文件上传 + TensorFlow图推理
+```
+
+**深度学习最可能用在：**
+1. **`tweet_event`** — 事件抽取，可能使用 BiLSTM+CRF（基于 PyTorch）做命名实体识别（地点、人物、组织）
+2. **`main.pyc` 中的 TensorFlow** — 用于加载某个模型做预测（`load` + `graph.as_default()` 是典型的 TF1.x 模型加载推理模式）
+3. **Transformers/BERT** — 用于文本分类或语义理解
+
+### 知识图谱（KG）**不是**通过深度学习训练得到的
+
+| 结论 | 证据 |
+|------|------|
+| ❌ **不是神经网络训练的** | 项目中无任何模型文件（.h5/.pt/.pth/.bin） |
+| ❌ **不是动态生成的** | `static/` 中的 KG JSON 是**预置的静态文件** |
+| ✅ **是从 MongoDB 查询的** | `KG_chainchart.pyc` 中有 `MongoClient`、`cbd109109`、`cbd109KG`、`db_find`、`get_collection`、`get_database` |
+| ✅ **内容是预构建的知识** | 卫星任务关系（Previousmission/Nextmission）、人物关系（President/Successor/Governor） |
+
+### 系统整体架构图
+
+```
+┌─────────────────────────────────────────────────┐
+│                  前端 (demo.html)                 │
+│  事件分析 │ 时间线 │ 人物关系图 │ 树状图 │ 多跳链  │
+└──────────────────┬──────────────────────────────┘
+                   │ HTTP/AJAX + SocketIO
+┌──────────────────▼──────────────────────────────┐
+│           main.py (Flask + TensorFlow)            │
+│   tf.get_default_graph() + graph.as_default()    │
+│     → 加载 TF1.x 模型做推理/预测                   │
+└──┬──────────┬──────────┬──────────┬─────────────┘
+   │          │          │          │
+   ▼          ▼          ▼          ▼
+tweet_event  KG_chain  Timeline   generate_chart
+(PyTorch?    (MongoDB)  (规则)     MongoDB 查
+ CRF/NER?)                         层级数据
+   │
+   ▼
+(可能用了 Transformers/BERT 做语义)
+```
+
+### 总结
+
+- ✅ **深度学习确实被使用了** — TensorFlow、PyTorch、Transformers (BERT) 都有依赖
+- ✅ **注意力机制可能被使用了** — 通过 HuggingFace `transformers` 库
+- ❌ **但知识图谱不是训练出来的** — KG 数据是预置的静态 JSON，从 MongoDB 查询展示
+- ❓ **具体模型细节无法确认** — 核心算法源码全在 `.pyc` 中，原始 `.py` 源码已丢失
+
+你想让我尝试反编译 `.pyc` 文件来还原算法细节吗？或者你想了解某个具体功能的实现方式？

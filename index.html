@@ -5,83 +5,179 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>船舶航迹可视化系统</title>
   <link rel="stylesheet" href="/src/styles/main.css" />
+  <style>
+    /* ====== 顶部导航栏 ====== */
+    #top-nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+      display: flex; gap: 0;
+      background: #0a0615; border-bottom: 2px solid #2a1a44;
+      padding: 0 12px; height: 42px;
+      align-items: stretch;
+    }
+    #top-nav button {
+      background: none; border: none; color: #8870a8;
+      font-size: 12px; font-weight: 600; padding: 0 18px;
+      cursor: pointer; transition: all 0.15s;
+      border-bottom: 3px solid transparent;
+      white-space: nowrap; font-family: inherit;
+    }
+    #top-nav button:hover { color: #cc66ff; background: #1a0e2e; }
+    #top-nav button.active {
+      color: #d8aaff;
+      border-bottom-color: #8844dd;
+    }
+    #top-nav .nav-brand {
+      font-size: 13px; font-weight: 700; color: #d8aaff;
+      display: flex; align-items: center; margin-right: 20px;
+      white-space: nowrap;
+    }
+
+    /* ====== 页面容器 ====== */
+    .page {
+      display: none;
+      position: absolute; top: 42px; left: 0; right: 0; bottom: 0;
+    }
+    .page.active { display: flex; }
+
+    /* ====== 占位页面居中提示 ====== */
+    .page-placeholder {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      width: 100%; height: 100%; background: #08030f; color: #8870a8; gap: 12px;
+    }
+    .page-placeholder .icon { font-size: 48px; }
+    .page-placeholder .title { font-size: 18px; font-weight: 700; color: #d8aaff; }
+    .page-placeholder .desc { font-size: 13px; color: #665577; }
+  </style>
 </head>
 <body>
-  <div id="app">
-    <div id="map-container"></div>
-    <div id="panel">
-      <div class="panel-header">
-        <h2>� 船舶航迹</h2>
-        <span class="panel-subtitle">实际航迹 vs 预测 · 悬浮查看 · 点击定位</span>
-        <div class="progress-track">
-          <div class="progress-bar" id="progress-bar"></div>
-        </div>
-      </div>
-      <div class="panel-controls">
-        <div class="control-group">
-          <label>模型</label>
-          <select id="model-select">
-            <option value="LSTM">LSTM</option>
-            <option value="GRU">GRU</option>
-            <option value="RNN">RNN</option>
-            <option value="DSTPP">DSTPP</option>
-          </select>
-        </div>
-        <div class="control-group">
-          <label>编号</label>
-          <input type="range" id="trajectory-slider" min="0" max="99" value="0" />
-          <span id="trajectory-label">#0</span>
-        </div>
-        <div class="control-group" style="justify-content:space-between">
-          <button id="btn-overview" class="btn" style="flex:1">🌐 全局概览</button>
-          <button id="btn-play" class="btn" style="flex:0.8">▶ 播放</button>
-          <button id="btn-reset" class="btn" style="flex:0.6">⏹</button>
-        </div>
-        <div class="control-group">
-          <label style="width:auto">速度</label>
-          <input type="range" id="speed-slider" min="1" max="10" value="3" style="flex:1" />
-        </div>
-      </div>
-      <div class="panel-info" id="panel-info">
-        <div class="info-grid">
-          <div><span class="info-label">模型</span><span id="info-model">LSTM</span></div>
-          <div><span class="info-label">轨迹</span><span id="info-id">#0</span></div>
-          <div><span class="info-label">采样</span><span id="info-points">—</span></div>
-          <div><span class="info-label">时长</span><span id="info-duration">—</span></div>
-          <div><span class="info-label">距离</span><span id="info-distance">—</span></div>
-          <div><span class="info-label">RMSE</span><span id="info-rmse">—</span></div>
-        </div>
-      </div>
-      <div class="panel-legend">
-        <div class="legend-item"><span class="legend-dot gt-dot"></span> 实际航迹 (GT)</div>
-        <div class="legend-item"><span class="legend-dot pred-dot"></span> 预测 (Pred)</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#ff4466"></span> 起点</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#ff5050"></span> 偏移线</div>
-      </div>
-      <div class="panel-legend" style="border-top:1px solid #2a1a44;padding-top:8px;margin-top:4px">
-        <span style="font-size:10px;color:#cc66ff;width:100%;margin-bottom:2px;display:block;font-weight:600">🟣 EDAS 事件密度</span>
-        <div class="legend-item"><span class="legend-dot" style="background:#dc2828"></span> 100+</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#f05028"></span> 50+</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#ff8228"></span> 30+</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#ffb432"></span> 10+</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#c88c3c"></span> 3+</div>
-      </div>
-      <div class="panel-edas-summary" id="panel-edas-summary" style="background:#08030f;border:1px solid #2a1a44;border-radius:6px;padding:8px 10px;display:none">
-        <div style="font-size:11px;font-weight:600;color:#cc66ff;margin-bottom:4px">📊 EDAS 事件概况</div>
-        <div id="edas-summary-content" style="font-size:10px;color:#8870a8;line-height:1.6"></div>
-      </div>
-      <div class="panel-intentions" id="panel-intentions" style="background:linear-gradient(135deg,#0a0615 0%,#100820 100%);border:1px solid #2a1a44;border-radius:8px;padding:10px 12px;display:none">
-        <div style="font-size:12px;font-weight:600;color:#d8aaff;margin-bottom:6px">🎯 航行属性与意图</div>
-        <div id="intent-content"></div>
-      </div>
-      <div class="panel-detail" id="panel-detail">
-        <div class="detail-hint">点击轨迹点查看详情</div>
-      </div>
-      <div class="panel-footer">
-        <span class="footer-hint">空格=播放 · ← → 切换</span>
+  <!-- ====== 顶部导航 ====== -->
+  <nav id="top-nav">
+    <span class="nav-brand">🛰️ 智能情报分析平台</span>
+    <button data-page="vessel" class="active">🚢 船舶航迹</button>
+    <button data-page="event">📊 事件分析</button>
+    <button data-page="finance">💰 金融舆情</button>
+    <button data-page="video">🎬 视频理解</button>
+    <button data-page="tcm">🔍 可解释性</button>
+  </nav>
+
+  <!-- ====== 公共地图层（船舶航迹 & 事件分析共享） ====== -->
+  <div id="map-container"></div>
+
+  <!-- ====== 右侧面板：船舶航迹（默认显示） ====== -->
+  <div id="panel-vessel" class="panel-side active">
+    <div class="panel-header">
+      <h2>🚢 船舶航迹</h2>
+      <span class="panel-subtitle">实际航迹 vs 预测 · 悬浮查看 · 点击定位</span>
+      <div class="progress-track">
+        <div class="progress-bar" id="progress-bar"></div>
       </div>
     </div>
+    <div class="panel-controls">
+      <div class="control-group">
+        <label>模型</label>
+        <select id="model-select">
+          <option value="LSTM">LSTM</option>
+          <option value="GRU">GRU</option>
+          <option value="RNN">RNN</option>
+          <option value="DSTPP">DSTPP</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>编号</label>
+        <input type="range" id="trajectory-slider" min="0" max="99" value="0" />
+        <span id="trajectory-label">#0</span>
+      </div>
+    </div>
+    <div class="control-group" style="justify-content:space-between">
+      <button id="btn-overview" class="btn" style="flex:1">🌐 全局概览</button>
+      <button id="btn-play" class="btn" style="flex:0.8">▶ 播放</button>
+      <button id="btn-reset" class="btn" style="flex:0.6">⏹</button>
+    </div>
+    <div class="control-group">
+      <label style="width:auto">速度</label>
+      <input type="range" id="speed-slider" min="1" max="10" value="3" style="flex:1" />
+    </div>
+    <div class="panel-info" id="panel-info">
+      <div class="info-grid">
+        <div><span class="info-label">模型</span><span id="info-model">LSTM</span></div>
+        <div><span class="info-label">轨迹</span><span id="info-id">#0</span></div>
+        <div><span class="info-label">采样</span><span id="info-points">—</span></div>
+        <div><span class="info-label">时长</span><span id="info-duration">—</span></div>
+        <div><span class="info-label">距离</span><span id="info-distance">—</span></div>
+        <div><span class="info-label">RMSE</span><span id="info-rmse">—</span></div>
+      </div>
+    </div>
+    <div class="panel-legend">
+      <div class="legend-item"><span class="legend-dot gt-dot"></span> 实际航迹 (GT)</div>
+      <div class="legend-item"><span class="legend-dot pred-dot"></span> 预测 (Pred)</div>
+      <div class="legend-item"><span class="legend-dot" style="background:#ff4466"></span> 起点</div>
+      <div class="legend-item"><span class="legend-dot" style="background:#ff5050"></span> 偏移线</div>
+    </div>
+    <div class="panel-intentions" id="panel-intentions" style="background:linear-gradient(135deg,#0a0615 0%,#100820 100%);border:1px solid #2a1a44;border-radius:8px;padding:10px 12px;display:none">
+      <div style="font-size:12px;font-weight:600;color:#d8aaff;margin-bottom:6px">🎯 航行属性与意图</div>
+      <div id="intent-content"></div>
+    </div>
+    <div class="panel-detail" id="panel-detail">
+      <div class="detail-hint">点击轨迹点查看详情</div>
+    </div>
+    <div class="panel-footer">
+      <span class="footer-hint">空格=播放 · ← → 切换</span>
+    </div>
   </div>
+
+  <!-- ====== 右侧面板：事件分析（默认隐藏） ====== -->
+  <div id="panel-event" class="panel-side">
+    <div class="panel-header">
+      <h2>📊 事件分析</h2>
+      <span class="panel-subtitle">事件聚类 · 类型识别 · 因果链 · 知识图谱</span>
+    </div>
+    <div class="panel-legend" style="border-bottom:1px solid #2a1a44;padding-bottom:8px;margin-bottom:4px">
+      <span style="font-size:10px;color:#cc66ff;width:100%;margin-bottom:2px;display:block;font-weight:600">🟣 事件密度热力</span>
+      <div class="legend-item"><span class="legend-dot" style="background:#dc2828"></span> 100+</div>
+      <div class="legend-item"><span class="legend-dot" style="background:#f05028"></span> 50+</div>
+      <div class="legend-item"><span class="legend-dot" style="background:#ff8228"></span> 30+</div>
+      <div class="legend-item"><span class="legend-dot" style="background:#ffb432"></span> 10+</div>
+      <div class="legend-item"><span class="legend-dot" style="background:#c88c3c"></span> 3+</div>
+    </div>
+    <div class="panel-edas-summary" id="panel-edas-summary" style="background:#08030f;border:1px solid #2a1a44;border-radius:6px;padding:8px 10px;">
+      <div style="font-size:11px;font-weight:600;color:#cc66ff;margin-bottom:4px">📊 事件概况</div>
+      <div id="edas-summary-content" style="font-size:10px;color:#8870a8;line-height:1.6">加载中...</div>
+    </div>
+    <div class="panel-edas-regions" style="flex:1;overflow-y:auto;min-height:0">
+      <div style="font-size:10px;color:#554466;margin:8px 0 4px">💡 点击地图上事件聚类圆查看事件列表，点击单个事件点查看深度分析</div>
+    </div>
+    <div class="panel-footer">
+      <span class="footer-hint">点击聚类圆 → 事件列表 | 点击事件点 → 深度分析</span>
+    </div>
+  </div>
+
+  <!-- ====== 页面3：金融舆情（占位） ====== -->
+  <div id="page-finance" class="page">
+    <div class="page-placeholder">
+      <div class="icon">💰</div>
+      <div class="title">金融舆情分析模块</div>
+      <div class="desc">舆情情感分析、实体关联 — 待集成</div>
+    </div>
+  </div>
+
+  <!-- ====== 页面4：视频理解（占位） ====== -->
+  <div id="page-video" class="page">
+    <div class="page-placeholder">
+      <div class="icon">🎬</div>
+      <div class="title">视频智能理解模块</div>
+      <div class="desc">目标检测、行为识别、跨视频关联 — 待集成</div>
+    </div>
+  </div>
+
+  <!-- ====== 页面5：可解释性（占位） ====== -->
+  <div id="page-tcm" class="page">
+    <div class="page-placeholder">
+      <div class="icon">🔍</div>
+      <div class="title">可解释性分析模块</div>
+      <div class="desc">模型决策溯源、注意力可视化、推理路径展示 — 待集成</div>
+    </div>
+  </div>
+
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
