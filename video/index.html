@@ -6,7 +6,6 @@
     <title>视频事件分析展示平台</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
     <link rel="stylesheet" href="./static/css/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
 </head>
 <body>
     <main id="upload-screen" class="upload-shell">
@@ -15,7 +14,7 @@
                 <span class="brand-icon"><i class="bi bi-camera-video"></i></span>
                 <div>
                     <h1>视频事件分析展示平台</h1>
-                    <p>纯 HTML 静态页面：选择视频后在浏览器本地预览，并展示固定摘要、思维导图、三问三答和精彩集锦。</p>
+                    <p>选择视频后在浏览器本地预览，并展示视频总结、动态认知图、三问三答和精彩集锦。</p>
                 </div>
             </div>
 
@@ -25,10 +24,10 @@
                     <i class="bi bi-cloud-arrow-up"></i>
                     <span>选择视频文件</span>
                 </button>
-                <div id="selected-file" class="selected-file">支持 MP4、AVI、MOV、MKV；静态页面不会把文件上传到服务器。</div>
+                <div id="selected-file" class="selected-file">支持 MP4、AVI、MOV、MKV；视频将在本地由多模态深度学习模型分析处理。</div>
                 <button type="button" id="show-result" class="primary-action" disabled>
                     <i class="bi bi-arrow-right-circle"></i>
-                    <span>查看固定分析结果</span>
+                    <span>查看分析结果</span>
                 </button>
             </div>
 
@@ -40,7 +39,7 @@
         <header class="result-header">
             <button type="button" id="back-upload" class="back-link"><i class="bi bi-arrow-left"></i> 返回选择视频</button>
             <div>
-                <h1>固定分析结果</h1>
+                <h1>分析结果</h1>
                 <p id="current-file">当前选择：未选择视频</p>
             </div>
         </header>
@@ -78,8 +77,11 @@
                             <i class="bi bi-clipboard"></i>
                         </button>
                     </div>
-                    <div id="summary-content" class="markdown-body"></div>
-                    <script type="text/markdown" id="summary-source"></script>
+                    <div class="summary-switcher">
+                        <div id="summary-buttons" class="summary-buttons" aria-label="视频总结主题"></div>
+                        <div id="summary-content" class="summary-detail"></div>
+                    </div>
+                    <pre id="summary-source" class="copy-source"></pre>
                 </article>
             </section>
 
@@ -88,17 +90,26 @@
                     <div class="panel-title with-action">
                         <div>
                             <i class="bi bi-diagram-3"></i>
-                            <h2>思维导图</h2>
+                            <h2>动态认知图</h2>
                         </div>
-                        <button class="icon-action" data-copy-target="mindmap-source" title="复制思维导图源码">
-                            <i class="bi bi-clipboard"></i>
-                        </button>
+                        <div class="panel-actions">
+                            <button id="generate-mindmap" class="text-action" type="button">
+                                <i class="bi bi-lightning-charge"></i>
+                                <span>生成认知图</span>
+                            </button>
+                            <button class="icon-action" data-copy-target="mindmap-source" title="复制认知图数据">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="mindmap-wrap">
-                        <ul id="mindmap-tree" class="mindmap-tree"></ul>
+                        <div id="mindmap-status" class="mindmap-status">等待生成</div>
+                        <div class="mindmap-stage">
+                            <ul id="mindmap-tree" class="mindmap-tree" aria-label="动态认知图"></ul>
+                        </div>
                     </div>
                     <details class="source-details">
-                        <summary>查看 mindmap 源码</summary>
+                        <summary>查看认知图数据</summary>
                         <pre id="mindmap-source"></pre>
                     </details>
                 </article>
@@ -112,7 +123,7 @@
                     </div>
                     <div class="qa-panel">
                         <div class="qa-hint">
-                            纯前端固定问答：你提出一个问题，页面返回一个回答，一共 3 个问题和 3 个回答。
+                            输入关于视频内容的问题，模型将结合视频分析结果生成回答。
                         </div>
 
                         <div id="question-suggestions" class="question-suggestions"></div>

@@ -193,7 +193,7 @@ var DashboardPage = {
     '<div>' +
     '  <div class="page-title">可信事件分析服务平台</div>' +
     '  <el-row :gutter="20">' +
-    '    <el-col :span="12" v-for="m in modules" :key="m.key">' +
+    '    <el-col :span="6" v-for="m in modules" :key="m.key">' +
     '      <el-card class="card-container" shadow="hover" @click.native="$router.push(m.path)" style="cursor:pointer;text-align:center">' +
     '        <div style="font-size:40px;color:#409EFF;margin-bottom:12px"><i :class="m.icon"></i></div>' +
     '        <div style="font-size:16px;font-weight:600;color:#303133;margin-bottom:6px">{{ m.title }}</div>' +
@@ -207,6 +207,9 @@ var DashboardPage = {
       modules: [
         { key: 'event', title: '小样本事件检测', desc: '对金融文本进行多类事件类型检测，识别文本中的关键事件', icon: 'el-icon-search', path: '/event-detection' },
         { key: 'trend', title: '事件演化趋势分析', desc: '多模态时序预测与可解释性分析，含误差评估与自注意力热力图', icon: 'el-icon-s-marketing', path: '/event-trend' },
+        { key: 'time', title: '舆情时间维度', desc: '按日期范围查询舆情数据，查看渠道分布与时间线', icon: 'el-icon-time', path: '/time-dimension' },
+        { key: 'element', title: '要素抽取', desc: '从金融文本中抽取关键要素，支持103种要素类型', icon: 'el-icon-document', path: '/element-detection' },
+        { key: 'blackmouth', title: '3类黑嘴识别', desc: '识别胡评妄议、歪曲解读、唱空市场三类网络黑嘴现象', icon: 'el-icon-warning', path: '/blackmouth-recognition' },
       ],
     };
   },
@@ -357,24 +360,62 @@ var BlackmouthPage = {
       showProcessingDialog: false,
       showResult: false,
       recognitionResult: '',
+      resultType: null,
+      blackmouthTypes: BLACKMOUTH_TYPES,
+      _exampleType: null,
     };
   },
   methods: {
-    selectSentimentData: function() {
+    selectNormal: function() {
       this.newsTitle = BLACKMOUTH_TITLE;
       this.newsContent = BLACKMOUTH_CONTENT;
-      this.$message.success('已选择示例舆情数据');
+      this._exampleType = 'normal';
+      this.$message.success('已选择正常舆情示例');
+    },
+    selectIrresponsible: function() {
+      this.newsTitle = BLACKMOUTH_TITLE_IRRESPONSIBLE;
+      this.newsContent = BLACKMOUTH_CONTENT_IRRESPONSIBLE;
+      this._exampleType = 'irresponsible';
+      this.$message.success('已选择【胡评妄议】示例');
+    },
+    selectDistort: function() {
+      this.newsTitle = BLACKMOUTH_TITLE_DISTORT;
+      this.newsContent = BLACKMOUTH_CONTENT_DISTORT;
+      this._exampleType = 'distort';
+      this.$message.success('已选择【歪曲解读】示例');
+    },
+    selectBearish: function() {
+      this.newsTitle = BLACKMOUTH_TITLE_BAD;
+      this.newsContent = BLACKMOUTH_CONTENT_BAD;
+      this._exampleType = 'bearish';
+      this.$message.success('已选择【唱空市场】示例');
     },
     recognizeBlackmouth: function() {
       if (!this.newsContent) { this.$message.warning('请输入新闻内容'); return; }
       var self = this;
+      var et = this._exampleType;
       this.loading = true;
       this.showProcessingDialog = true;
       this.showResult = false;
       setTimeout(function() {
         self.loading = false;
         self.showProcessingDialog = false;
-        self.recognitionResult = BLACKMOUTH_RESULT;
+        if (et === 'normal') {
+          self.recognitionResult = BLACKMOUTH_RESULT;
+          self.resultType = BLACKMOUTH_EXAMPLE_TYPE;
+        } else if (et === 'irresponsible') {
+          self.recognitionResult = BLACKMOUTH_RESULT_IRRESPONSIBLE;
+          self.resultType = BLACKMOUTH_EXAMPLE_TYPE_IRRESPONSIBLE;
+        } else if (et === 'distort') {
+          self.recognitionResult = BLACKMOUTH_RESULT_DISTORT;
+          self.resultType = BLACKMOUTH_EXAMPLE_TYPE_DISTORT;
+        } else if (et === 'bearish') {
+          self.recognitionResult = BLACKMOUTH_RESULT_BAD;
+          self.resultType = BLACKMOUTH_EXAMPLE_TYPE_BAD;
+        } else {
+          self.recognitionResult = BLACKMOUTH_RESULT;
+          self.resultType = BLACKMOUTH_EXAMPLE_TYPE;
+        }
         self.showResult = true;
         self.$message.success('黑嘴识别完成');
       }, 3000);
@@ -382,7 +423,16 @@ var BlackmouthPage = {
   },
   template:
     '<div style="padding:20px">' +
-    '  <div class="page-title">黑嘴识别</div>' +
+    '  <div class="page-title" style="margin-bottom:12px">黑嘴识别</div>' +
+    '  <el-card shadow="never" style="margin-bottom:20px">' +
+    '    <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">' +
+    '      <span style="font-size:14px;font-weight:600;color:#303133">网络黑嘴类型：</span>' +
+    '      <div v-for="t in blackmouthTypes" :key="t.key" style="display:flex;align-items:center;gap:8px;background:#f5f7fa;border-radius:8px;padding:10px 16px">' +
+    '        <el-tag :color="t.color" effect="dark" size="medium" style="font-weight:600">{{ t.label }}</el-tag>' +
+    '        <span style="font-size:13px;color:#909399">{{ t.desc }}</span>' +
+    '      </div>' +
+    '    </div>' +
+    '  </el-card>' +
     '  <el-card class="input-card">' +
     '    <div class="input-header"><span class="input-label">舆情标题:</span></div>' +
     '    <el-input placeholder="请输入舆情标题" v-model="newsTitle"></el-input>' +
@@ -390,16 +440,112 @@ var BlackmouthPage = {
     '    <el-input type="textarea" :rows="6" placeholder="请输入舆情内容" v-model="newsContent"></el-input>' +
     '    <div class="button-actions">' +
     '      <el-button type="primary" @click="recognizeBlackmouth" :loading="loading">生成按钮</el-button>' +
-    '      <el-button type="primary" @click="selectSentimentData">选择舆情数据</el-button>' +
+    '      <el-button @click="selectNormal">正常舆情</el-button>' +
+    '      <el-button type="danger" @click="selectIrresponsible" plain>胡评妄议</el-button>' +
+    '      <el-button type="warning" @click="selectDistort" plain>歪曲解读</el-button>' +
+    '      <el-button type="danger" @click="selectBearish">唱空市场</el-button>' +
     '    </div>' +
     '  </el-card>' +
     '  <el-dialog title="" :visible.sync="showProcessingDialog" width="300px" :show-close="false" :close-on-click-modal="false" :close-on-press-escape="false" center>' +
     '    <div class="processing-content"><i class="el-icon-loading" style="font-size:24px;color:#409EFF"></i><p style="margin-top:10px">模型处理中...</p></div>' +
     '  </el-dialog>' +
     '  <el-card class="result-card" v-if="showResult">' +
-    '    <div class="result-header"><span class="result-label">识别结果:</span></div>' +
+    '    <div class="result-header" style="display:flex;align-items:center;gap:10px;margin-bottom:12px">' +
+    '      <span class="result-label">识别结果:</span>' +
+    '      <el-tag v-if="resultType===null" type="success" effect="dark" size="medium" style="font-weight:600">非黑嘴</el-tag>' +
+    '      <el-tag v-else :color="(blackmouthTypes.find(function(t){return t.key===resultType})||{}).color" effect="dark" size="medium" style="font-weight:600">{{ (blackmouthTypes.find(function(t){return t.key===resultType})||{}).label }}</el-tag>' +
+    '    </div>' +
     '    <el-input type="textarea" :rows="12" v-model="recognitionResult" readonly></el-input>' +
     '  </el-card>' +
+    '</div>',
+};
+
+// ==================== 舆情时间维度信息 ====================
+var TIME_FULL_MONTHS = 9; // 2024-01 ~ 2024-09 共9个月
+var TimeDimensionPage = {
+  name: 'TimeDimensionPage',
+  data: function() {
+    return {
+      dateRange: ['2024-01', '2024-09'],
+      keyword: '',
+      loading: false,
+      queried: false,
+      queriedTotalCount: 0,
+      queriedCategories: [],
+      events: TIME_SAMPLE_EVENTS,
+      pickerOptions: {
+        disabledDate: function(time) {
+          var t = new Date('2024-01-01').getTime();
+          var end = new Date('2024-09-30').getTime();
+          return time.getTime() < t || time.getTime() > end;
+        },
+      },
+      catColors: ['#7367F0', '#8CE68C', '#5E77FF', '#FFB400', '#FF5C75'],
+    };
+  },
+  methods: {
+    doQuery: function() {
+      if (!this.dateRange || this.dateRange.length !== 2) {
+        this.$message.warning('请选择日期范围');
+        return;
+      }
+      var self = this;
+      this.loading = true;
+      setTimeout(function() {
+        self.loading = false;
+        self.queried = true;
+        var start = new Date(self.dateRange[0] + '-01');
+        var end = new Date(self.dateRange[1] + '-01');
+        var selectedMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
+        var ratio = selectedMonths / TIME_FULL_MONTHS;
+        var scaledTotal = Math.round(TIME_TOTAL_COUNT * ratio);
+        var scaledCategories = TIME_CATEGORIES.map(function(c) {
+          return { name: c.name, count: Math.round(c.count * ratio) };
+        });
+        self.queriedTotalCount = scaledTotal;
+        self.queriedCategories = scaledCategories;
+        self.$message.success('查询完成，共检索到 ' + scaledTotal + ' 条舆情数据（跨度 ' + selectedMonths + ' 个月）');
+      }, 1500);
+    },
+  },
+  template:
+    '<div style="padding:20px">' +
+    '  <div class="page-title" style="margin-bottom:12px">舆情时间维度信息</div>' +
+    '  <el-card class="chart-card" shadow="hover">' +
+    '    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+    '      <span style="font-size:14px;font-weight:600;color:#303133;white-space:nowrap">日期范围</span>' +
+    '      <el-date-picker v-model="dateRange" type="monthrange" range-separator="至" start-placeholder="开始月份" end-placeholder="结束月份" value-format="yyyy-MM" size="small" style="width:240px" :picker-options="pickerOptions" />' +
+    '      <el-input v-model="keyword" placeholder="关键词（选填）" size="small" clearable style="width:180px" />' +
+    '      <el-button type="primary" @click="doQuery" :loading="loading" icon="el-icon-search" size="small">查询</el-button>' +
+    '    </div>' +
+    '  </el-card>' +
+    '  <div v-if="!queried && !loading" style="text-align:center;padding:80px 0;font-size:15px;color:#909399"><i class="el-icon-info" style="margin-right:8px"></i>请选择日期范围后点击查询</div>' +
+    '  <div v-if="loading" class="loading-placeholder"><i class="el-icon-loading"></i>正在查询舆情数据...</div>' +
+    '  <template v-if="queried">' +
+    '    <el-row :gutter="20" class="metrics-row">' +
+    '      <el-col :xs="8"><div class="metric-card"><div class="metric-label">舆情总数量</div><div class="metric-value" style="color:#409EFF">{{ queriedTotalCount }}</div></div></el-col>' +
+    '      <el-col :xs="8"><div class="metric-card"><div class="metric-label">数据来源数</div><div class="metric-value">{{ queriedCategories.length }}</div></div></el-col>' +
+    '      <el-col :xs="8"><div class="metric-card"><div class="metric-label">查询时间跨度</div><div class="metric-value" style="font-size:20px">{{ dateRange[0] }} ~ {{ dateRange[1] }}</div></div></el-col>' +
+    '    </el-row>' +
+    '    <el-card class="chart-card">' +
+    '      <div class="section-title">各渠道舆情数量分布</div>' +
+    '      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:8px">' +
+    '        <div v-for="(c,i) in queriedCategories" :key="c.name" style="flex:1;min-width:140px;text-align:center;background:#f5f7fa;border-radius:8px;padding:16px 12px">' +
+    '          <div style="font-size:24px;font-weight:700" :style="{color:catColors[i]}">{{ c.count }}</div>' +
+    '          <div style="font-size:13px;color:#909399;margin-top:4px">{{ c.name }}</div>' +
+    '        </div>' +
+    '      </div>' +
+    '    </el-card>' +
+    '    <el-card class="chart-card">' +
+    '      <div class="section-title">最新舆情示例（时间线）</div>' +
+    '      <p class="section-desc">从 {{ queriedTotalCount }} 条舆情中抽取的最新数据</p>' +
+    '      <el-timeline style="margin-top:16px">' +
+    '        <el-timeline-item v-for="(ev,i) in events" :key="i" :timestamp="ev.time" placement="top" :color="i===0?\'#409EFF\':\'#909399\'">' +
+    '          {{ ev.title }}' +
+    '        </el-timeline-item>' +
+    '      </el-timeline>' +
+    '    </el-card>' +
+    '  </template>' +
     '</div>',
 };
 
@@ -415,6 +561,7 @@ var ElementDetectionPage = {
       detectionResult: null,
       attentionData: null,
       isExample: false,
+      allElementLabels: ELEMENT_LABELS,
     };
   },
   computed: {
@@ -428,6 +575,12 @@ var ElementDetectionPage = {
         else if (v && !Array.isArray(v)) filtered[keys[i]] = v;
       }
       return filtered;
+    },
+    detectedLabelSet: function() {
+      var s = {};
+      var keys = Object.keys(this.nonEmptyResults);
+      for (var i = 0; i < keys.length; i++) s[keys[i]] = true;
+      return s;
     },
     highlightTokens: function() {
       if (!this.attentionData || !this.detectionResult) return [];
@@ -499,8 +652,11 @@ var ElementDetectionPage = {
     '      <div v-if="Object.keys(nonEmptyResults).length===0"><span class="no-result">暂无检测结果</span></div>' +
     '    </div>' +
     '  </el-card>' +
-    '  <el-card class="attention-card" shadow="never" v-if="attentionData">' +
-    '    <simple-attention-heatmap :data="attentionData" :highlightTokens="highlightTokens" :explanation="attentionExplanation" :symmetric="false" />' +
+    '  <el-card class="chart-card" shadow="never">' +
+    '    <div class="section-title">全部要素类型（共 ' + ELEMENT_TOTAL_COUNT + ' 种）</div>' +
+    '    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;max-height:400px;overflow-y:auto">' +
+    '      <el-tag v-for="label in allElementLabels" :key="label" size="small" :type="detectedLabelSet[label]?\'success\':\'info\'" :effect="detectedLabelSet[label]?\'dark\':\'plain\'" style="cursor:default">{{ label }}</el-tag>' +
+    '    </div>' +
     '  </el-card>' +
     '</div>',
 };
@@ -898,13 +1054,16 @@ var AppLayout = {
     '      <el-menu-item index="/dashboard"><i class="el-icon-s-home"></i><span slot="title">首页</span></el-menu-item>' +
     '      <el-menu-item index="/event-detection"><i class="el-icon-search"></i><span slot="title">小样本事件检测</span></el-menu-item>' +
     '      <el-menu-item index="/event-trend"><i class="el-icon-s-marketing"></i><span slot="title">事件演化趋势分析</span></el-menu-item>' +
+    '      <el-menu-item index="/time-dimension"><i class="el-icon-time"></i><span slot="title">舆情时间维度</span></el-menu-item>' +
+    '      <el-menu-item index="/element-detection"><i class="el-icon-document"></i><span slot="title">要素抽取</span></el-menu-item>' +
+'      <el-menu-item index="/blackmouth-recognition"><i class="el-icon-warning"></i><span slot="title">3类黑嘴识别</span></el-menu-item>' +
     '    </el-menu>' +
     '  </el-aside>' +
     '  <el-container>' +
     '    <el-header class="app-header">' +
     '      <div class="header-left">' +
     '        <i :class="isCollapse?\'el-icon-s-unfold\':\'el-icon-s-fold\'" class="collapse-btn" @click="toggleSidebar"></i>' +
-    '        <span class="breadcrumb">{{ {"/dashboard":"首页","/event-detection":"小样本事件检测","/event-trend":"事件演化趋势分析"}[$route.path]||"首页" }}</span>' +
+    '        <span class="breadcrumb">{{ {"/dashboard":"首页","/event-detection":"小样本事件检测","/event-trend":"事件演化趋势分析","/time-dimension":"舆情时间维度","/element-detection":"要素抽取","/blackmouth-recognition":"3类黑嘴识别"}[$route.path]||"首页" }}</span>' +
     '      </div>' +
     '      <div class="header-right">可信事件分析服务平台</div>' +
     '    </el-header>' +
@@ -920,6 +1079,9 @@ var router = new VueRouter({
     { path: '/', redirect: '/dashboard' },
     { path: '/dashboard', name: 'Dashboard', component: DashboardPage },
     { path: '/event-detection', name: 'EventDetection', component: EventDetectionPage },
+    { path: '/blackmouth-recognition', name: 'BlackmouthRecognition', component: BlackmouthPage },
+    { path: '/time-dimension', name: 'TimeDimension', component: TimeDimensionPage },
+    { path: '/element-detection', name: 'ElementDetection', component: ElementDetectionPage },
     { path: '/event-trend', name: 'EventTrendAnalysis', component: EventTrendAnalysisPage },
     { path: '*', redirect: '/dashboard' },
   ],
