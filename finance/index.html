@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>金融舆情分析 Demo 系统</title>
+  <link rel="stylesheet" href="https://unpkg.com/element-ui@2.15.14/lib/theme-chalk/index.css">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    [v-cloak] { display: none; }
+  </style>
+</head>
+<body>
+  <div id="app" v-cloak>
+    <router-view />
+  </div>
+
+  <!-- CDN 依赖 -->
+  <script src="https://unpkg.com/vue@2.7.14/dist/vue.min.js"></script>
+  <script src="https://unpkg.com/element-ui@2.15.14/lib/index.js"></script>
+  <script src="https://unpkg.com/echarts@5.4.3/dist/echarts.min.js"></script>
+  <script src="https://unpkg.com/vue-router@3.6.5/dist/vue-router.min.js"></script>
+
+  <!-- Demo 数据文件 -->
+  <script src="js/data/attention_中国海油-IPO.js"></script>
+  <script src="js/data/attention_上市公司-IPO.js"></script>
+  <script src="js/data/attention_股票回购.js"></script>
+  <script src="js/data/attention_破产申请.js"></script>
+  <script src="js/data/attention_关联交易.js"></script>
+  <script src="js/data/attentionData.js"></script>
+  <script src="js/data/stucDemos.js"></script>
+  <script src="js/data/sample.js"></script>
+  <script src="js/data/predictionData.js"></script>
+  <script src="js/data/eventSeqData.js"></script>
+  <script src="js/data/eventTestResults.js"></script>
+  <!-- 主应用 -->
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视频事件分析展示平台</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="./static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
+</head>
+<body>
+    <main id="upload-screen" class="upload-shell">
+        <section class="upload-panel">
+            <div class="brand-row">
+                <span class="brand-icon"><i class="bi bi-camera-video"></i></span>
+                <div>
+                    <h1>视频事件分析展示平台</h1>
+                    <p>纯 HTML 静态页面：选择视频后在浏览器本地预览，并展示固定摘要、思维导图、三问三答和精彩集锦。</p>
+                </div>
+            </div>
+
+            <div class="upload-box">
+                <input id="video-upload" type="file" accept=".mp4,.avi,.mov,.mkv,video/*" hidden>
+                <button type="button" id="choose-video" class="upload-trigger">
+                    <i class="bi bi-cloud-arrow-up"></i>
+                    <span>选择视频文件</span>
+                </button>
+                <div id="selected-file" class="selected-file">支持 MP4、AVI、MOV、MKV；静态页面不会把文件上传到服务器。</div>
+                <button type="button" id="show-result" class="primary-action" disabled>
+                    <i class="bi bi-arrow-right-circle"></i>
+                    <span>查看固定分析结果</span>
+                </button>
+            </div>
+
+            <div id="upload-status" class="status-line" role="status"></div>
+        </section>
+    </main>
+
+    <section id="result-screen" class="static-hidden">
+        <header class="result-header">
+            <button type="button" id="back-upload" class="back-link"><i class="bi bi-arrow-left"></i> 返回选择视频</button>
+            <div>
+                <h1>固定分析结果</h1>
+                <p id="current-file">当前选择：未选择视频</p>
+            </div>
+        </header>
+
+        <main class="result-layout">
+            <section class="section-band media-grid">
+                <article class="panel">
+                    <div class="panel-title">
+                        <i class="bi bi-play-circle"></i>
+                        <h2>本地视频预览</h2>
+                    </div>
+                    <video id="uploaded-video" class="video-player" controls preload="metadata"></video>
+                </article>
+
+                <article class="panel">
+                    <div class="panel-title">
+                        <i class="bi bi-film"></i>
+                        <h2>精彩视频集锦</h2>
+                    </div>
+                    <video class="video-player" controls preload="metadata">
+                        <source src="./static/highlights/parade_highlight_30s.mp4" type="video/mp4">
+                        您的浏览器不支持视频播放。
+                    </video>
+                </article>
+            </section>
+
+            <section class="section-band">
+                <article class="panel">
+                    <div class="panel-title with-action">
+                        <div>
+                            <i class="bi bi-file-text"></i>
+                            <h2>视频内容摘要</h2>
+                        </div>
+                        <button class="icon-action" data-copy-target="summary-source" title="复制摘要">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </div>
+                    <div id="summary-content" class="markdown-body"></div>
+                    <script type="text/markdown" id="summary-source"></script>
+                </article>
+            </section>
+
+            <section class="section-band">
+                <article class="panel">
+                    <div class="panel-title with-action">
+                        <div>
+                            <i class="bi bi-diagram-3"></i>
+                            <h2>思维导图</h2>
+                        </div>
+                        <button class="icon-action" data-copy-target="mindmap-source" title="复制思维导图源码">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </div>
+                    <div class="mindmap-wrap">
+                        <ul id="mindmap-tree" class="mindmap-tree"></ul>
+                    </div>
+                    <details class="source-details">
+                        <summary>查看 mindmap 源码</summary>
+                        <pre id="mindmap-source"></pre>
+                    </details>
+                </article>
+            </section>
+
+            <section class="section-band">
+                <article class="panel">
+                    <div class="panel-title">
+                        <i class="bi bi-question-circle"></i>
+                        <h2>问答对</h2>
+                    </div>
+                    <div class="qa-panel">
+                        <div class="qa-hint">
+                            纯前端固定问答：你提出一个问题，页面返回一个回答，一共 3 个问题和 3 个回答。
+                        </div>
+
+                        <div id="question-suggestions" class="question-suggestions"></div>
+                        <div id="qa-messages" class="qa-messages" aria-live="polite"></div>
+
+                        <form id="qa-form" class="qa-form">
+                            <input id="qa-input" type="text" maxlength="200" placeholder="请输入问题，例如：视频在 00:00—00:20 阶段主要展示了什么内容？">
+                            <button type="submit" id="qa-submit">
+                                <i class="bi bi-send"></i>
+                                <span>提交问题</span>
+                            </button>
+                        </form>
+                        <div id="qa-status" class="status-line"></div>
+                    </div>
+                </article>
+            </section>
+        </main>
+    </section>
+
+    <script src="./static/js/static-app.js"></script>
+</body>
+</html>

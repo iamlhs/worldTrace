@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>中药推荐可解释性展示</title>
+    <link rel="stylesheet" href="./styles.css?v=13" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace">
+        <aside class="query-panel">
+          <div class="brand-block">
+            <p class="eyebrow">TCM Recommendation Explainability</p>
+            <h1>中药推荐可解释性展示</h1>
+          </div>
+
+          <form id="recommendationForm" class="symptom-form">
+            <label for="symptomInput">症状输入</label>
+            <textarea
+              id="symptomInput"
+              name="symptomInput"
+              rows="5"
+              placeholder="例如：壮热、恶心、咳嗽、自汗"
+            ></textarea>
+            <p id="symptomError" class="form-error" hidden>请至少输入4个症状</p>
+
+            <div class="preset-row" aria-label="常用症状">
+              <button type="button" class="preset-chip" data-symptom="壮热">壮热</button>
+              <button type="button" class="preset-chip" data-symptom="恶心">恶心</button>
+              <button type="button" class="preset-chip" data-symptom="咳嗽">咳嗽</button>
+              <button type="button" class="preset-chip" data-symptom="自汗">自汗</button>
+            </div>
+
+            <button class="run-button" type="submit">
+              <span aria-hidden="true">▶</span>
+              可解释性分析
+            </button>
+          </form>
+        </aside>
+
+        <section class="result-panel" aria-label="四种可解释性技术结果">
+          <div class="result-header">
+            <div>
+              <p class="eyebrow">Explainability Techniques</p>
+              <h2>4 种技术结果展示</h2>
+            </div>
+            <div id="activeSymptoms" class="active-symptoms"></div>
+          </div>
+
+          <div class="algorithm-switcher" role="tablist" aria-label="算法切换">
+            <button class="algorithm-tab is-active" type="button" role="tab" aria-selected="true" data-tech="gat">
+              图神经网络
+            </button>
+            <button class="algorithm-tab" type="button" role="tab" aria-selected="false" data-tech="meta">
+              元路径
+            </button>
+            <button class="algorithm-tab" type="button" role="tab" aria-selected="false" data-tech="attention">
+              注意力机制
+            </button>
+            <button class="algorithm-tab" type="button" role="tab" aria-selected="false" data-tech="llm">
+              认知机制
+            </button>
+          </div>
+
+          <div class="tech-grid" hidden>
+            <article class="tech-card tech-card-wide tech-panel" data-panel="gat">
+              <div class="card-heading">
+                <div>
+                  <p class="tech-index">01</p>
+                </div>
+                <!-- <span class="model-badge">GAT 图神经网络模型</span> -->
+              </div>
+              <div id="gatExplainer" class="gat-explainer"></div>
+            </article>
+
+            <article class="tech-card tech-card-wide tech-panel" data-panel="meta" hidden>
+              <div class="card-heading">
+                <div>
+                  <p class="tech-index">02</p>
+                  <!-- <h3>Meta-path</h3> -->
+                </div>
+                <!-- <span class="model-badge">Meta-path 元路径模型</span> -->
+              </div>
+              <div class="path-stage">
+                <svg id="metaPathSvg" class="path-svg" viewBox="0 0 720 320" role="img" aria-label="Meta-path 可解释路径图"></svg>
+              </div>
+            </article>
+
+            <article class="tech-card tech-card-wide tech-panel" data-panel="attention" hidden>
+              <div class="card-heading">
+                <div>
+                  <p class="tech-index">03</p>
+                  <!-- <h3>Attention Map 热力图</h3> -->
+                </div>
+                <!-- <span class="model-badge">Attention 注意力机制模型</span> -->
+              </div>
+              <div class="heatmap-area">
+                <div id="heatmap" class="heatmap"></div>
+                <div class="heatmap-scale">
+                  <span>低</span>
+                  <div class="scale-bar"></div>
+                  <span>高</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="tech-card tech-card-wide tech-panel" data-panel="llm" hidden>
+              <div class="card-heading">
+                <div>
+                  <p class="tech-index">04</p>
+                  <h3>大模型推理路径</h3>
+                </div>
+                <!-- <span class="model-badge">LLM 大模型推理</span> -->
+              </div>
+              <div id="llmReasoning" class="reasoning-block"></div>
+            </article>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="./app.js?v=13"></script>
+  </body>
+</html>
