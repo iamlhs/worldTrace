@@ -668,6 +668,7 @@ var EventTrendAnalysisPage = {
     return {
       selectedSample: null,
       data: null,
+      loading: false,
       sampleIds: Object.keys(EVENT_SEQ_RESULTS).map(Number),
       forecastChart: null,
     };
@@ -679,11 +680,21 @@ var EventTrendAnalysisPage = {
   methods: {
     onSampleChange: function(sid) {
       if (sid == null) return;
-      this.data = EVENT_SEQ_RESULTS[sid];
       var self = this;
-      this.$nextTick(function() {
-        self.renderForecastChart();
-      });
+      // 模拟深度学习模型计算延迟
+      self.data = null;
+      self.loading = true;
+      if (self.forecastChart) {
+        self.forecastChart.dispose();
+        self.forecastChart = null;
+      }
+      setTimeout(function() {
+        self.data = EVENT_SEQ_RESULTS[sid];
+        self.loading = false;
+        self.$nextTick(function() {
+          self.renderForecastChart();
+        });
+      }, 1000);
     },
     renderForecastChart: function() {
       if (!this.data) return;
@@ -762,6 +773,7 @@ var EventTrendAnalysisPage = {
     '    </el-row>' +
     '    <el-card class="chart-card"><div class="section-title">预测折线图</div><p class="section-desc">历史观测值（蓝）、未来真实值（绿）、预测值（橙），虚线为预测起始分界</p><div class="chart-wrapper" ref="forecastChart"></div></el-card>' +
     '  </template>' +
+    '  <div v-else-if="loading" style="text-align:center;padding:40px 0;font-size:15px;color:#409EFF"><i class="el-icon-loading" style="margin-right:8px;font-size:20px"></i>正在调用深度学习时序预测模型，分析贸易差额趋势...</div>' +
     '  <div v-else style="text-align:center;padding:40px 0;font-size:15px;color:#909399"><i class="el-icon-info" style="margin-right:8px"></i>请选择一个测试样本查看预测结果</div>' +
     '</div>',
 };

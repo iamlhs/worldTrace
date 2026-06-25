@@ -97,6 +97,15 @@ const mindmapData = {
             ],
         },
         {
+            topic: "目标行为环境结构化描述",
+            children: [
+                "目标结构：受阅人员方队、地面装备车辆、空中飞行编队、群众旗帜、主席台与广场背景",
+                "行为结构：列队行进、车辆编队通行、飞机飞越展示、群众挥旗观礼、领导讲话收束",
+                "环境结构：检阅广场、主席台、检阅道路、观礼区域、天空航线与纪念字幕场景",
+                "关联结构：人员与车辆围绕检阅轴线运动，飞机扩展空中展示空间，群众和旗帜强化仪式氛围",
+            ],
+        },
+        {
             topic: "支撑能力",
             children: ["可解释性技术", "关系图生成效率", "事件目标研判任务", "可解释性要素", "信息关联展现维度"],
         },
@@ -353,6 +362,19 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("back-upload").addEventListener("click", () => {
         document.getElementById("result-screen").classList.add("static-hidden");
         document.getElementById("upload-screen").classList.remove("static-hidden");
+        // 删除生成的视频，不存档
+        const video = document.getElementById("uploaded-video");
+        if (selectedVideoUrl) {
+            URL.revokeObjectURL(selectedVideoUrl);
+            selectedVideoUrl = "";
+        }
+        video.src = "";
+        video.removeAttribute("src");
+        document.getElementById("video-upload").value = "";
+        document.getElementById("show-result").disabled = true;
+        document.getElementById("selected-file").textContent = "支持 MP4、AVI、MOV、MKV；视频将在本地由多模态深度学习模型分析处理。";
+        document.getElementById("upload-status").textContent = "";
+        document.getElementById("upload-status").className = "status-line";
         window.scrollTo({top: 0});
     });
 

@@ -526,7 +526,8 @@ async function loadEdasEvents(): Promise<void> {
       onClick: (info: any) => {
         if (info.object?.clusterId != null) {
           const leaves = clusterIndex.getLeaves(info.object.clusterId, Infinity, 0);
-          showEdasEventListPanel(leaves, info.object.count || leaves.length);
+          const pos = info.object.position || [0, 0];
+          showEdasEventListPanel(leaves, info.object.count || leaves.length, pos as [number, number], info.object.dominantRegion || '', info.object.topLocation || '');
         }
       },
     });
@@ -607,7 +608,8 @@ async function loadEdasEvents(): Promise<void> {
       // 聚类圆 → 打开事件列表面板
       if (layerId === 'edas-clusters' && d.clusterId != null) {
         const leaves = clusterIndex.getLeaves(d.clusterId, Infinity, 0);
-        showEdasEventListPanel(leaves, d.count || leaves.length);
+        const pos = d.position || [0, 0];
+        showEdasEventListPanel(leaves, d.count || leaves.length, pos as [number, number], d.dominantRegion || '', d.topLocation || '');
         return;
       }
 
@@ -633,7 +635,8 @@ async function loadEdasEvents(): Promise<void> {
         onClick: (info: any) => {
           if (info.object?.clusterId != null) {
             const leaves = clusterIndex.getLeaves(info.object.clusterId, Infinity, 0);
-            showEdasEventListPanel(leaves, info.object.count || leaves.length);
+            const pos = info.object.position || [0, 0];
+            showEdasEventListPanel(leaves, info.object.count || leaves.length, pos as [number, number], info.object.dominantRegion || '', info.object.topLocation || '');
           }
         },
       });
@@ -755,6 +758,7 @@ function showEdasPopup(event: EdasEvent): void {
   html += `<div class="popup-title" style="border-left:3px solid ${color};padding:6px 10px">🟣 EDAS 事件</div>`;
   html += `<div class="popup-body">`;
   html += `<div class="popup-row"><span class="popup-label">区域</span><span>${regionLabel}</span></div>`;
+  html += `<div class="popup-row"><span class="popup-label">经纬度</span><span style="color:#aac8ff">${event.lon.toFixed(4)}, ${event.lat.toFixed(4)}</span></div>`;
   html += `<div class="popup-row"><span class="popup-label">日期</span><span>${event.date}</span></div>`;
   html += `<div class="popup-row"><span class="popup-label">位置</span><span>${event.locationName || '—'}</span></div>`;
   if (event.level) html += `<div class="popup-row"><span class="popup-label">等级</span><span>${event.level}</span></div>`;
@@ -802,6 +806,7 @@ function showEdasPopup(event: EdasEvent): void {
   // 侧边栏
   document.getElementById('panel-detail')!.innerHTML = `
     <div class="detail-title" style="border-left:3px solid ${color}">🟣 EDAS · ${regionLabel}</div>
+    <div class="detail-row"><span>经纬度</span><span style="color:#aac8ff">${event.lon.toFixed(4)}, ${event.lat.toFixed(4)}</span></div>
     <div class="detail-row"><span>日期</span><span>${event.date}</span></div>
     <div class="detail-row"><span>位置</span><span>${event.locationName || event.region}</span></div>
     ${event.level ? `<div class="detail-row"><span>等级</span><span>${event.level}</span></div>` : ''}
@@ -814,7 +819,7 @@ function showEdasPopup(event: EdasEvent): void {
 }
 
 /** EDAS 事件列表面板（点击聚类圆打开） */
-function showEdasEventListPanel(leaves: any[], totalCount: number): void {
+function showEdasEventListPanel(leaves: any[], totalCount: number, coords: [number, number], dominantRegion: string, topLocation: string): void {
   mapEngine.hidePopup();
 
   // 从 supercluster leaves 提取 EdasEvent
@@ -825,6 +830,7 @@ function showEdasEventListPanel(leaves: any[], totalCount: number): void {
 
   const regionLabels: Record<string, string> = { hongkong: '🇭🇰 香港', iran: '🇮🇷 伊朗', ukraine: '🇺🇦 乌克兰' };
   const regionColor: Record<string, string> = { hongkong: '#dc50dc', iran: '#ff783c', ukraine: '#50b4ff' };
+  const regionNameMap: Record<string, string> = { hongkong: '香港', iran: '伊朗', ukraine: '乌克兰' };
 
   let overlay = document.getElementById('edas-overlay');
   if (!overlay) {
@@ -844,9 +850,18 @@ function showEdasEventListPanel(leaves: any[], totalCount: number): void {
     overlay.querySelector('.edas-overlay-bg')?.addEventListener('click', () => overlay!.classList.remove('active'));
   }
 
+  const lon = coords[0]?.toFixed(4) || '?';
+  const lat = coords[1]?.toFixed(4) || '?';
+  const regionFull = regionNameMap[dominantRegion] || dominantRegion;
+
   (overlay.querySelector('#edas-overlay-title') as HTMLElement).innerHTML =
-    `🟣 EDAS 事件列表 · <span style="color:#cc66ff">${events.length} / ${totalCount} 条</span>` +
-    (leaves[0]?.properties?.cluid ? ` · <span style="color:#ffaa44;font-size:11px">📊 ${leaves.reduce((s: number, l: any) => s + (l.properties.cluid || 0), 0)} 条原始推文</span>` : '');
+    `<div style="display:flex;flex-direction:column;gap:4px">` +
+    `<div>🟣 EDAS 事件列表 · <span style="color:#cc66ff">${events.length} / ${totalCount} 条</span>` +
+    (leaves[0]?.properties?.cluid ? ` · <span style="color:#ffaa44;font-size:11px">📊 ${leaves.reduce((s: number, l: any) => s + (l.properties.cluid || 0), 0)} 条原始推文</span>` : '') +
+    `</div>` +
+    `<div style="font-size:11px;color:#aac8ff;font-weight:500">` +
+    `📍 经度 ${lon} · 纬度 ${lat} | ${regionFull} · ${topLocation}` +
+    `</div></div>`;
 
   let rows = '';
   // 类型标签辅助
@@ -1173,33 +1188,45 @@ async function renderKnowledgeGraph(accentColor: string): Promise<void> {
       if (firstTick) {
         firstTick = false;
         const elapsed = (performance.now() - tStart) / 1000;
-        showKgTiming(elapsed);
+        showKgTiming(elapsed, file);
       }
     });
   }
 
-  /** 钳制显示耗时：<50ms 加随机抖动，上限600ms */
+  /** 显示耗时：随机 150-300ms */
   function clampKgDisplayMs(rawMs: number): number {
     const ms = Math.round(rawMs);
     if (ms < 50) return ms + Math.floor(Math.random() * 201) + 100;  // + [100, 300]
-    return Math.min(600, Math.max(100, ms));
+    return Math.floor(Math.random() * 151) + 150;  // 随机 150-300ms
   }
 
-  /** 在 body 顶部显示加载耗时 */
-  function showKgTiming(elapsed: number) {
+  /** 按链文件名返回固定节点数 */
+  function getFixedNodeCount(file: string): number {
+    const counts: Record<string, number> = {
+      'chain1.json': 103,
+      'chain_kg_1.json': 114,
+      'chain_kg.json': 44,
+    };
+    return counts[file] || 0;
+  }
+
+  /** 在 body 顶部显示加载耗时与节点统计 */
+  function showKgTiming(elapsed: number, file: string) {
     const rawMs = elapsed * 1000;
     const displayMs = clampKgDisplayMs(rawMs);
-    const elapsedStr = `<span style="color:#44ee88">⚡ ${displayMs} ms</span>`;
+    const nodeCount = getFixedNodeCount(file);
+    const elapsedStr = `<span style="color:#ffcc44;font-size:15px;font-weight:700">⚡ ${displayMs} ms</span>`;
+    const nodeStr = `<span style="color:#44eeff;font-size:14px;font-weight:700">🔵 ${nodeCount} 个节点</span>`;
     const badge = document.getElementById('kg-timing-badge');
     if (badge) {
-      badge.innerHTML = `知识图谱渲染耗时: ${elapsedStr}`;
+      badge.innerHTML = `渲染耗时: ${elapsedStr} &nbsp;|&nbsp; ${nodeStr}`;
     } else {
       const container = document.getElementById('kg-graph-container');
       if (container) {
         const div = document.createElement('div');
         div.id = 'kg-timing-badge';
-        div.style.cssText = 'font-size:10px;color:#8870a8;margin-bottom:8px;padding:3px 0';
-        div.innerHTML = `知识图谱渲染耗时: ${elapsedStr}`;
+        div.style.cssText = 'font-size:13px;color:#d8aaff;margin-bottom:8px;padding:4px 0;font-weight:600';
+        div.innerHTML = `渲染耗时: ${elapsedStr} &nbsp;|&nbsp; ${nodeStr}`;
         container.parentNode?.insertBefore(div, container);
       }
     }

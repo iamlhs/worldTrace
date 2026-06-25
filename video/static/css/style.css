@@ -428,7 +428,7 @@ p {
 }
 
 .mindmap-stage {
-    min-width: 1120px;
+    min-width: 1320px;
     padding: 10px 0 18px;
 }
 
@@ -700,6 +700,6 @@ p {
     }
 
     .mindmap-stage {
-        min-width: 980px;
+        min-width: 1180px;
     }
 }

@@ -41,56 +41,73 @@ function mockRecommendationModel(symptoms) {
 }
 
 function mockGatModel(symptoms, herbs) {
-  const symptomScores = symptoms.slice(0, 4);
-  while (symptomScores.length < 4) {
-    symptomScores.push(["胃热", "呕吐", "乏力", "痰湿"][symptomScores.length]);
-  }
-
   return {
-    symptoms: symptomScores,
-    candidates: herbs.slice(0, 6).map((herb, index) => ({
+    symptoms: ["壮热", "恶心", "咳嗽", "自汗"],
+    candidates: [
+      {
+        id: 375,
+        name: "甘草",
+        latin: "Glycyrrhiza uralensis",
+        score: 0.39206791,
+        scores: [0.79818451, 0.05514135, 0.0580365, 0.08863764],
+      },
+      {
+        id: 295,
+        name: "紫菀",
+        latin: "Aster tataricus",
+        score: 0.28554741,
+        scores: [0.2205164, 0.15201902, 0.02871577, 0.59874886],
+      },
+      {
+        id: 41,
+        name: "人参",
+        latin: "Ginseng",
+        score: 0.26014486,
+        scores: [0.4781743, 0.20350735, 0.12981886, 0.18849941],
+      },
+      {
+        id: 65,
+        name: "西洋参",
+        latin: "Panax quinquefolius",
+        score: 0.2595163,
+        scores: [0.310177, 0.15651022, 0.14001802, 0.39329478],
+      },
+      {
+        id: 85,
+        name: "半夏",
+        latin: "Pinellia ternata",
+        score: 0.22934653,
+        scores: [0.26312587, 0.43523842, 0.14176349, 0.15987217],
+      },
+    ].map((herb) => ({
       ...herb,
-      scores: symptomScores.map((symptom, symptomIndex) => {
-        const seed = (index + 2) * (symptomIndex + 3);
-        const value = 0.08 + ((seed * 17) % 43) / 100;
-        return Number(value.toFixed(2));
-      }),
-      focusIndex: index % symptomScores.length,
+      focusIndex: herb.scores.indexOf(Math.max(...herb.scores)),
     })),
-    groundTruth: ["白术", "甘草", "人参", "陈皮", "茯苓", "半夏"],
+    groundTruth: ["甘草", "紫菀", "人参", "西洋参", "半夏"],
   };
 }
 
 function mockMetaPathModel(symptoms, herbs) {
-  const sourceSymptom = symptoms.includes("呕吐") ? "呕吐" : symptoms[1] || symptoms[0] || "恶心";
-  const targetHerb = herbs[0]?.name || "半夏";
-
   return {
-    sourceSymptom,
-    targetHerb,
+    sourceSymptom: "咳嗽",
+    targetHerb: "白术",
     upperPaths: [
-      { label: "外感病因\n在胃", left: 0.03, right: 0.295 },
-      { label: "胃热", left: 0.026, right: 0.108 },
-      { label: "胃气虚", left: 0.027, right: 0.236 },
-      { label: "肝热", left: 0.031, right: 0.145 },
+      { label: "风邪侵袭肌表", left: 0.02640971, right: 0.02715251 },
+      { label: "颧红盗汗", left: 0.0276687, right: 0.0541076 },
     ],
-    methodNode: "降逆止呕",
-    lowerPaths: [
-      { label: "呕吐", left: 0.082, right: 0.027 },
-      { label: "干呕", left: 0.079, right: 0.045 },
-    ],
-    compoundNode: "SMIT03300",
+    methodNode: "阴虚火炎证",
+    methodToHerb: 0.10855415,
   };
 }
 
-function mockAttentionMapModel(herbs) {
-  const labels = herbs.slice(0, 5).map((herb) => herb.name);
+function mockAttentionMapModel() {
+  const labels = ["甘草", "人参", "茯苓", "半夏", "白术"];
   const matrix = [
-    [0.203004, 0.097217, 0.136706, 0.208861, 0.354212],
-    [0.143142, 0.109657, 0.126049, 0.273848, 0.347304],
-    [0.165917, 0.105381, 0.131492, 0.252284, 0.344926],
-    [0.16795, 0.106331, 0.135305, 0.255593, 0.33482],
-    [0.207672, 0.087828, 0.133228, 0.207151, 0.36412],
+    [0.104312, 0.260502, 0.119906, 0.379114, 0.136166],
+    [0.104305, 0.250723, 0.132727, 0.347495, 0.16475],
+    [0.106578, 0.25515, 0.132986, 0.337482, 0.167803],
+    [0.10956, 0.244631, 0.137808, 0.341595, 0.166406],
+    [0.112001, 0.240625, 0.157496, 0.256, 0.233877],
   ];
 
   return { labels, matrix };
@@ -182,7 +199,7 @@ function renderGatExplainer(gatResult) {
           const isFocus = score === topScore;
           return `
             <div class="gat-attention-cell${isFocus ? " is-focus" : ""}" style="background: ${background}">
-              <span class="gat-cell-score">${score.toFixed(2)}</span>
+              <span class="gat-cell-score">${score.toFixed(6)}</span>
             </div>
           `;
         }),
@@ -237,8 +254,9 @@ function appendNode(parent, { id, x, y, r, color, label, className = "" }) {
 }
 
 function appendEdge(parent, { x1, y1, x2, y2, from, to, label, className, flow = true }) {
-  const id = `edge-${from}-${to}-${String(label).replace(/\W/g, "")}`;
   const weight = Number(label) || 0.1;
+  const displayLabel = Number.isFinite(Number(label)) ? Number(label).toFixed(3) : label;
+  const id = `edge-${from}-${to}-${String(displayLabel).replace(/\W/g, "")}`;
   const line = svgElement("line", {
     x1,
     y1,
@@ -252,7 +270,7 @@ function appendEdge(parent, { x1, y1, x2, y2, from, to, label, className, flow =
   });
   parent.appendChild(line);
   if (label) {
-    const labelText = appendText(parent, label, (x1 + x2) / 2 - 8, (y1 + y2) / 2 - 8, "edge-label");
+    const labelText = appendText(parent, displayLabel, (x1 + x2) / 2 - 8, (y1 + y2) / 2 - 8, "edge-label");
     labelText.dataset.edgeLabelFor = id;
   }
   return line;
@@ -366,33 +384,18 @@ function renderMetaPath(pathResult) {
   metaPathSvg.appendChild(edgeLayer);
   metaPathSvg.appendChild(nodeLayer);
 
-  appendNode(nodeLayer, { id: "m1-source", x: 64, y: 104, r: 38, color: "#dd2d25", label: pathResult.sourceSymptom });
-  appendNode(nodeLayer, { id: "m1-target", x: 638, y: 104, r: 38, color: "#68ad22", label: pathResult.targetHerb });
-  appendNode(nodeLayer, { id: "m1-method", x: 480, y: 104, r: 48, color: "#f4b713", label: pathResult.methodNode });
+  appendNode(nodeLayer, { id: "m1-source", x: 88, y: 132, r: 42, color: "#dd2d25", label: pathResult.sourceSymptom });
+  appendNode(nodeLayer, { id: "m1-path-0", x: 282, y: 92, r: 40, color: "#abcbe4", label: pathResult.upperPaths[0].label });
+  appendNode(nodeLayer, { id: "m1-path-1", x: 282, y: 172, r: 40, color: "#abcbe4", label: pathResult.upperPaths[1].label });
+  appendNode(nodeLayer, { id: "m1-method", x: 500, y: 132, r: 48, color: "#f4b713", label: pathResult.methodNode });
+  appendNode(nodeLayer, { id: "m1-target", x: 650, y: 132, r: 40, color: "#68ad22", label: pathResult.targetHerb });
 
-  pathResult.upperPaths.forEach((path, index) => {
-    const y = 42 + index * 38;
-    const nodeId = `m1-path-${index}`;
-    appendNode(nodeLayer, { id: nodeId, x: 260, y, r: 34, color: "#abcbe4", label: path.label });
-    appendEdge(edgeLayer, { x1: 64, y1: 104, x2: 260, y2: y, from: "m1-source", to: nodeId, label: path.left, className: "edge-blue" });
-    appendEdge(edgeLayer, { x1: 260, y1: y, x2: 480, y2: 104, from: nodeId, to: "m1-method", label: path.right, className: "edge-amber" });
-  });
-
-  appendEdge(edgeLayer, { x1: 480, y1: 104, x2: 638, y2: 104, from: "m1-method", to: "m1-target", label: "0.108", className: "edge-amber" });
-  appendText(edgeLayer, "M1: symptom → path concept → treatment → herb", 170, 190, "edge-label", 18);
-
-  appendNode(nodeLayer, { id: "m2-target", x: 86, y: 258, r: 36, color: "#68ad22", label: pathResult.targetHerb });
-  appendNode(nodeLayer, { id: "m2-compound", x: 250, y: 258, r: 36, color: "#914318", label: pathResult.compoundNode });
-  appendNode(nodeLayer, { id: "m2-path-0", x: 412, y: 226, r: 34, color: "#ec7c1b", label: pathResult.lowerPaths[0].label });
-  appendNode(nodeLayer, { id: "m2-path-1", x: 412, y: 290, r: 34, color: "#ec7c1b", label: pathResult.lowerPaths[1].label });
-  appendNode(nodeLayer, { id: "m2-source", x: 604, y: 258, r: 36, color: "#dd2d25", label: pathResult.sourceSymptom });
-
-  appendEdge(edgeLayer, { x1: 86, y1: 258, x2: 250, y2: 258, from: "m2-target", to: "m2-compound", label: "0.108", className: "edge-amber" });
-  appendEdge(edgeLayer, { x1: 250, y1: 258, x2: 412, y2: 226, from: "m2-compound", to: "m2-path-0", label: pathResult.lowerPaths[0].left, className: "edge-amber" });
-  appendEdge(edgeLayer, { x1: 250, y1: 258, x2: 412, y2: 290, from: "m2-compound", to: "m2-path-1", label: pathResult.lowerPaths[1].left, className: "edge-amber" });
-  appendEdge(edgeLayer, { x1: 412, y1: 226, x2: 604, y2: 258, from: "m2-path-0", to: "m2-source", label: pathResult.lowerPaths[0].right, className: "edge-red" });
-  appendEdge(edgeLayer, { x1: 412, y1: 290, x2: 604, y2: 258, from: "m2-path-1", to: "m2-source", label: pathResult.lowerPaths[1].right, className: "edge-red" });
-  appendText(edgeLayer, "M2: herb → compound → symptom evidence", 196, 315, "edge-label", 18);
+  appendEdge(edgeLayer, { x1: 88, y1: 132, x2: 282, y2: 92, from: "m1-source", to: "m1-path-0", label: pathResult.upperPaths[0].left, className: "edge-blue" });
+  appendEdge(edgeLayer, { x1: 88, y1: 132, x2: 282, y2: 172, from: "m1-source", to: "m1-path-1", label: pathResult.upperPaths[1].left, className: "edge-blue" });
+  appendEdge(edgeLayer, { x1: 282, y1: 92, x2: 500, y2: 132, from: "m1-path-0", to: "m1-method", label: pathResult.upperPaths[0].right, className: "edge-amber" });
+  appendEdge(edgeLayer, { x1: 282, y1: 172, x2: 500, y2: 132, from: "m1-path-1", to: "m1-method", label: pathResult.upperPaths[1].right, className: "edge-amber" });
+  appendEdge(edgeLayer, { x1: 500, y1: 132, x2: 650, y2: 132, from: "m1-method", to: "m1-target", label: pathResult.methodToHerb, className: "edge-amber" });
+  appendText(edgeLayer, "semantic_metapath: 咳嗽 → {风邪侵袭肌表, 颧红盗汗} → 阴虚火炎证 → 白术", 104, 232, "edge-label", 18);
   enableMetaPathDragging();
 }
 
@@ -463,7 +466,7 @@ function renderDashboard(symptoms) {
   const herbs = mockRecommendationModel(symptoms);
   const gatResult = mockGatModel(symptoms, herbs);
   const pathResult = mockMetaPathModel(symptoms, herbs);
-  const attentionResult = mockAttentionMapModel(herbs);
+  const attentionResult = mockAttentionMapModel();
   const reasoning = mockLlmReasoningModel(symptoms, herbs);
 
   renderActiveSymptoms(symptoms);
